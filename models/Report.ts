@@ -1,10 +1,21 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
+export interface ICircleAnnotation {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  normalizedX: number;
+  normalizedY: number;
+  normalizedRadius: number;
+}
+
 export interface IAttachment {
   url: string;
   fileName: string;
   fileType: string;
   fileSize: number;
+  annotations?: ICircleAnnotation[];
 }
 
 export interface ILocation {
@@ -35,11 +46,22 @@ export interface IReport extends Document {
   resolvedAt?: Date;
 }
 
+const circleAnnotationSchema = new Schema<ICircleAnnotation>({
+  id: { type: String, required: true },
+  x: { type: Number, required: true },
+  y: { type: Number, required: true },
+  radius: { type: Number, required: true },
+  normalizedX: { type: Number, required: true },
+  normalizedY: { type: Number, required: true },
+  normalizedRadius: { type: Number, required: true },
+});
+
 const attachmentSchema = new Schema<IAttachment>({
   url: { type: String, required: true },
   fileName: { type: String, required: true },
   fileType: { type: String, required: true },
   fileSize: { type: Number, required: true },
+  annotations: { type: [circleAnnotationSchema], default: [] },
 });
 
 const locationSchema = new Schema<ILocation>({
@@ -113,6 +135,11 @@ reportSchema.index({ incidentDate: -1 });
 reportSchema.index({ publicId: 1 });
 reportSchema.index({ 'location.lat': 1, 'location.lng': 1 });
 
-const Report: Model<IReport> = mongoose.models.Report || mongoose.model<IReport>('Report', reportSchema);
+// Force recompilation of model to pick up schema changes
+if (mongoose.models.Report) {
+  delete mongoose.models.Report;
+}
+
+const Report: Model<IReport> = mongoose.model<IReport>('Report', reportSchema);
 
 export default Report;

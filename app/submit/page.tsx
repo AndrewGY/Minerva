@@ -1,0 +1,647 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import ReCAPTCHA from "react-google-recaptcha";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertCircle, Upload, X, CheckCircle, ChevronDown, ChevronUp, Copy, ExternalLink, Target } from "lucide-react";
+import ImageAnnotation from "@/components/ImageAnnotation";
+
+const schema = z.object({
+  incidentDate: z.string().min(1, "Date required"),
+  incidentTime: z.string().min(1, "Time required"),
+  location: z.object({
+    address: z.string().min(5, "Location too short"),
+    lat: z.number().optional(),
+    lng: z.number().optional(),
+  }),
+  industry: z.string().optional(),
+  incidentType: z.string().optional(),
+  regulationBreached: z.string().optional(),
+  severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  description: z.string().min(20, "Description too short"),
+  reporterEmail: z.string().email().optional().or(z.literal("")),
+  reporterPhone: z.string().optional(),
+  isAnonymous: z.boolean(),
+});
+
+type FormData = z.infer<typeof schema>;
+
+interface FileWithAnnotations {
+  file: File;
+  annotations: Array<{
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    normalizedX: number;
+    normalizedY: number;
+    normalizedRadius: number;
+  }>;
+  url?: string;
+}
+
+export default function SubmitReport() {
+  const [files, setFiles] = useState<FileWithAnnotations[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [publicId, setPublicId] = useState("");
+  const [error, setError] = useState("");
+  const [showAdditional, setShowAdditional] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [annotatingFile, setAnnotatingFile] = useState<number | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      incidentDate: new Date().toISOString().split('T')[0],
+      incidentTime: new Date().toTimeString().slice(0, 5),
+      isAnonymous: true,
+      severityLevel: "MEDIUM",
+      location: { address: "" },
+    },
+  });
+
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    
+    const newFiles = Array.from(e.target.files);
+    const valid = newFiles.filter(file => {
+      const types = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/avi', 'application/pdf'];
+      const size = 10 * 1024 * 1024;
+      return types.includes(file.type) && file.size <= size;
+    });
+    
+    if (valid.length !== newFiles.length) {
+      setError("Some files rejected. Use images, videos, or PDFs under 10MB.");
+    }
+    
+    const filesWithAnnotations = valid.map(file => ({
+      file,
+      annotations: [],
+      url: URL.createObjectURL(file)
+    }));
+    
+    setFiles(prev => [...prev, ...filesWithAnnotations]);
+  };
+
+  const removeFile = (index: number) => {
+    const fileToRemove = files[index];
+    if (fileToRemove.url) {
+      URL.revokeObjectURL(fileToRemove.url);
+    }
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const startAnnotation = (index: number) => {
+    const file = files[index];
+    if (file.file.type.startsWith('image/')) {
+      setAnnotatingFile(index);
+    }
+  };
+
+  const handleAnnotationComplete = (index: number, annotations: any[]) => {
+    setFiles(prev => prev.map((file, i) => 
+      i === index ? { ...file, annotations } : file
+    ));
+    setAnnotatingFile(null);
+  };
+
+  const handleAnnotationCancel = () => {
+    setAnnotatingFile(null);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const onSubmit = async (data: FormData) => {
+    setError("");
+    setSubmitting(true);
+
+    try {
+
+      const uploadedFiles = [];
+      for (const fileWithAnnotations of files) {
+        const formData = new FormData();
+        formData.append('file', fileWithAnnotations.file);
+        
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (res.ok) {
+          const result = await res.json();
+          const attachmentData = {
+            url: result.url,
+            fileName: fileWithAnnotations.file.name,
+            fileType: fileWithAnnotations.file.type,
+            fileSize: fileWithAnnotations.file.size,
+            annotations: fileWithAnnotations.annotations,
+          };
+          uploadedFiles.push(attachmentData);
+        }
+      }
+
+      const incidentDateTime = new Date(`${data.incidentDate}T${data.incidentTime}`);
+
+      const submitData = {
+        ...data,
+        incidentDate: incidentDateTime.toISOString(),
+        attachments: uploadedFiles,
+        recaptchaToken: "temp-disabled",
+      };
+
+
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submitData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Submission failed");
+      }
+
+      setPublicId(result.publicId);
+      setSubmitted(true);
+      form.reset();
+      
+      files.forEach(file => {
+        if (file.url) {
+          URL.revokeObjectURL(file.url);
+        }
+      });
+      setFiles([]);
+      
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    const statusUrl = `${window.location.origin}/status?id=${publicId}`;
+    
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <Card className="w-full max-w-lg text-center">
+          <CardHeader>
+            <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
+            <CardTitle className="text-green-700">Report Submitted Successfully</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <p className="text-gray-600">
+              Your report has been received and will be reviewed by our team.
+            </p>
+            
+            <div className="bg-gray-100 p-4 rounded-md">
+              <p className="text-sm font-medium text-gray-700 mb-2">Reference ID:</p>
+              <p className="text-lg font-mono text-blue-600 mb-3">{publicId}</p>
+              
+              <div className="border-t pt-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">Status Tracking Link:</p>
+                <div className="flex items-center gap-2 bg-white p-2 rounded border">
+                  <input
+                    type="text"
+                    value={statusUrl}
+                    readOnly
+                    className="flex-1 text-sm bg-transparent border-none outline-none text-gray-600"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyToClipboard(statusUrl)}
+                    className="flex items-center gap-1"
+                  >
+                    {copied ? (
+                      <>
+                        <CheckCircle className="w-3 h-3" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <h3 className="font-medium text-blue-900 mb-2">What happens next?</h3>
+              <p className="text-blue-800 text-sm">
+                Our team will review your report and take the appropriate action. You can use the link above to track progress and receive updates.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-center">
+              <Link href={`/status?id=${publicId}`}>
+                <Button className="flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  View Status
+                </Button>
+              </Link>
+              <Link href="/submit">
+                <Button variant="outline">Submit Another</Button>
+              </Link>
+            </div>
+
+            <Link href="/" className="text-sm text-blue-600 hover:underline">
+              Return to Home
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <Link href="/" className="text-xl font-bold text-gray-900">
+              Minerva
+            </Link>
+            <Link href="/login">
+              <Button variant="outline">Login</Button>
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Report Incident</h1>
+          <p className="text-gray-600">
+            Report safety incidents securely. All reports are treated confidentially.
+          </p>
+        </div>
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-red-800 font-medium">Error</h3>
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Incident Details</CardTitle>
+              <CardDescription>When and where did this happen?</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="date">Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    {...form.register("incidentDate")}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  {form.formState.errors.incidentDate && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {form.formState.errors.incidentDate.message}
+                    </p>
+                  )}
+                </div>
+                
+                <div>
+                  <Label htmlFor="time">Time</Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    {...form.register("incidentTime")}
+                  />
+                  {form.formState.errors.incidentTime && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {form.formState.errors.incidentTime.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Textarea
+                  id="location"
+                  placeholder="Building, floor, area, or specific location details"
+                  {...form.register("location.address")}
+                  rows={3}
+                />
+                {form.formState.errors.location?.address && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {form.formState.errors.location.address.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Description</CardTitle>
+              <CardDescription>What happened?</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Label htmlFor="description">Details</Label>
+              <Textarea
+                id="description"
+                placeholder="Describe what happened, who was involved, and any immediate actions taken"
+                {...form.register("description")}
+                rows={6}
+                className="mt-2"
+              />
+              {form.formState.errors.description && (
+                <p className="text-red-600 text-sm mt-1">
+                  {form.formState.errors.description.message}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Evidence</CardTitle>
+              <CardDescription>Photos, videos, or documents (optional)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-600 mb-2">Upload files</p>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,application/pdf"
+                  onChange={handleFiles}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  Choose Files
+                </Button>
+                <p className="text-sm text-gray-500 mt-2">
+                  Images, Videos, PDFs • Max 10MB per file
+                </p>
+              </div>
+
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  {files.map((fileWithAnnotations, index) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded-md">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm">
+                          <p className="font-medium">{fileWithAnnotations.file.name}</p>
+                          <p className="text-gray-500">
+                            {(fileWithAnnotations.file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                          {fileWithAnnotations.annotations.length > 0 && (
+                            <p className="text-green-600 text-xs mt-1">
+                              {fileWithAnnotations.annotations.length} annotation(s) added
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {fileWithAnnotations.file.type.startsWith('image/') && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => startAnnotation(index)}
+                            >
+                              <Target className="w-4 h-4 mr-1" />
+                              Annotate
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFile(index)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <button
+                type="button"
+                onClick={() => setShowAdditional(!showAdditional)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <div>
+                  <CardTitle>Additional Fields</CardTitle>
+                  <CardDescription>Classification and categorization (optional)</CardDescription>
+                </div>
+                {showAdditional ? (
+                  <ChevronUp className="w-5 h-5 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-gray-500" />
+                )}
+              </button>
+            </CardHeader>
+            {showAdditional && (
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Incident Type</Label>
+                    <Select onValueChange={(value) => form.setValue("incidentType", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="injury">Personal Injury</SelectItem>
+                        <SelectItem value="near-miss">Near Miss</SelectItem>
+                        <SelectItem value="property-damage">Property Damage</SelectItem>
+                        <SelectItem value="environmental">Environmental</SelectItem>
+                        <SelectItem value="security">Security</SelectItem>
+                        <SelectItem value="fire">Fire/Explosion</SelectItem>
+                        <SelectItem value="chemical">Chemical Exposure</SelectItem>
+                        <SelectItem value="equipment">Equipment Failure</SelectItem>
+                        <SelectItem value="compliance">Compliance</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.formState.errors.incidentType && (
+                      <p className="text-red-600 text-sm mt-1">
+                        {form.formState.errors.incidentType.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Severity</Label>
+                    <Select onValueChange={(value) => form.setValue("severityLevel", value as any)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select severity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="CRITICAL">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Industry</Label>
+                  <Select onValueChange={(value) => form.setValue("industry", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select industry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="construction">Construction</SelectItem>
+                      <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                      <SelectItem value="oil-gas">Oil & Gas</SelectItem>
+                      <SelectItem value="mining">Mining</SelectItem>
+                      <SelectItem value="transportation">Transportation</SelectItem>
+                      <SelectItem value="healthcare">Healthcare</SelectItem>
+                      <SelectItem value="education">Education</SelectItem>
+                      <SelectItem value="retail">Retail</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="regulation">Regulation/Policy</Label>
+                  <Input
+                    id="regulation"
+                    placeholder="OSHA standard, company policy, etc."
+                    {...form.register("regulationBreached")}
+                  />
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact (Optional)</CardTitle>
+              <CardDescription>Leave contact info for updates</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="anonymous"
+                  {...form.register("isAnonymous")}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="anonymous">Submit anonymously</Label>
+              </div>
+
+              {!form.watch("isAnonymous") && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="your.email@example.com"
+                      {...form.register("reporterEmail")}
+                    />
+                    {form.formState.errors.reporterEmail && (
+                      <p className="text-red-600 text-sm mt-1">
+                        {form.formState.errors.reporterEmail.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+1 555 123 4567"
+                      {...form.register("reporterPhone")}
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+
+{/* //  TODO: readd recaptcha later after putting on domain */}
+          {/* <div className="flex justify-center">
+            <ReCAPTCHA
+              ref={recaptchaRef}
+              size="invisible"
+              sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
+            />
+          </div> */}
+
+          <div className="flex justify-center pt-6">
+            <Button
+              type="submit"
+              disabled={submitting}
+              className="px-8 py-3 text-lg"
+              size="lg"
+            >
+              {submitting ? "Submitting..." : "Submit Report"}
+            </Button>
+          </div>
+        </form>
+
+        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-md p-4">
+          <h3 className="font-medium text-blue-900 mb-2">Privacy Notice</h3>
+          <p className="text-blue-800 text-sm">
+            All reports are confidential. Anonymous reports cannot be traced. Contact info is only used for updates.
+          </p>
+        </div>
+      </div>
+
+      {annotatingFile !== null && files[annotatingFile] && (
+        <ImageAnnotation
+          imageUrl={files[annotatingFile].url!}
+          fileName={files[annotatingFile].file.name}
+          onAnnotationComplete={(annotations) => handleAnnotationComplete(annotatingFile, annotations)}
+          onCancel={handleAnnotationCancel}
+          initialAnnotations={files[annotatingFile].annotations}
+        />
+      )}
+    </div>
+  );
+}

@@ -45,7 +45,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Sign in to HSSE Reporting</CardTitle>
+          <CardTitle>Sign in to Minerva</CardTitle>
           <CardDescription>
             Enter your credentials to access the system
           </CardDescription>
