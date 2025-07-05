@@ -12,6 +12,9 @@ export default function Home() {
               <Link href="/submit">
                 <Button variant="outline">Submit Report</Button>
               </Link>
+              <Link href="/dashboard">
+                <Button variant="outline">Dashboard</Button>
+              </Link>
               <Link href="/login">
                 <Button>Login</Button>
               </Link>

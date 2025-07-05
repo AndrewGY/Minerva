@@ -14,15 +14,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Upload, X, CheckCircle, ChevronDown, ChevronUp, Copy, ExternalLink, Target } from "lucide-react";
 import ImageAnnotation from "@/components/ImageAnnotation";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const schema = z.object({
   incidentDate: z.string().min(1, "Date required"),
   incidentTime: z.string().min(1, "Time required"),
   location: z.object({
-    address: z.string().min(5, "Location too short"),
-    lat: z.number().optional(),
-    lng: z.number().optional(),
+    address: z.string(),
+    lat: z.number(),
+    lng: z.number(),
+    details: z.string().optional(),
   }),
+  skipAddressEntry: z.boolean().optional(),
   industry: z.string().optional(),
   incidentType: z.string().optional(),
   regulationBreached: z.string().optional(),
@@ -31,6 +35,19 @@ const schema = z.object({
   reporterEmail: z.string().email().optional().or(z.literal("")),
   reporterPhone: z.string().optional(),
   isAnonymous: z.boolean(),
+}).refine((data) => {
+  // If skip address entry is enabled, require location details
+  if (data.skipAddressEntry && (!data.location.details || data.location.details.trim().length < 10)) {
+    return false;
+  }
+  // If skip address entry is disabled, require valid address
+  if (!data.skipAddressEntry && (!data.location.address || data.location.address.trim().length < 5)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Valid location information is required",
+  path: ["location"]
 });
 
 type FormData = z.infer<typeof schema>;
@@ -48,6 +65,7 @@ interface FileWithAnnotations {
   }>;
   url?: string;
 }
+// probably should have used a proper type library for this
 
 export default function SubmitReport() {
   const [files, setFiles] = useState<FileWithAnnotations[]>([]);
@@ -58,6 +76,7 @@ export default function SubmitReport() {
   const [showAdditional, setShowAdditional] = useState(false);
   const [copied, setCopied] = useState(false);
   const [annotatingFile, setAnnotatingFile] = useState<number | null>(null);
+  const [skipAddressEntry, setSkipAddressEntry] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const form = useForm<FormData>({
@@ -67,9 +86,31 @@ export default function SubmitReport() {
       incidentTime: new Date().toTimeString().slice(0, 5),
       isAnonymous: true,
       severityLevel: "MEDIUM",
-      location: { address: "" },
+      location: { address: "", lat: 0, lng: 0, details: "" },
+      skipAddressEntry: false,
     },
   });
+
+  const handleLocationSelect = (locationData: { address: string; lat: number; lng: number }) => {
+    form.setValue("location.address", locationData.address);
+    form.setValue("location.lat", locationData.lat);
+    form.setValue("location.lng", locationData.lng);
+  };
+
+  const handleSkipAddressChange = (checked: boolean) => {
+    setSkipAddressEntry(checked);
+    if (checked) {
+      // Clear address data when skipping
+      form.setValue("location.address", "Manual location entry");
+      form.setValue("location.lat", 0);
+      form.setValue("location.lng", 0);
+    } else {
+      // Reset when re-enabling address entry
+      form.setValue("location.address", "");
+      form.setValue("location.lat", 0);
+      form.setValue("location.lng", 0);
+    }
+  };
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -252,7 +293,7 @@ export default function SubmitReport() {
             <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
               <h3 className="font-medium text-blue-900 mb-2">What happens next?</h3>
               <p className="text-blue-800 text-sm">
-                Our team will review your report and take the appropriate action. You can use the link above to track progress and receive updates.
+                Our team will review your report and take the appropiate action. You can use the link above to track progress and receive updates.
               </p>
             </div>
 
@@ -348,17 +389,55 @@ export default function SubmitReport() {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="location">Location</Label>
-                <Textarea
-                  id="location"
-                  placeholder="Building, floor, area, or specific location details"
-                  {...form.register("location.address")}
-                  rows={3}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 flex-wrap">
+                  <Checkbox 
+                    id="skip-address"
+                    checked={skipAddressEntry}
+                    onCheckedChange={handleSkipAddressChange}
+                  />
+                  <Label htmlFor="skip-address" className="text-sm leading-relaxed">
+                    Skip address lookup (manual location entry only)
+                  </Label>
+                </div>
+
+                <AddressAutocomplete
+                  onLocationSelect={handleLocationSelect}
+                  value={form.watch("location.address")}
+                  label="Address"
+                  placeholder="Start typing a location in Guyana..."
+                  required={!skipAddressEntry}
+                  disabled={skipAddressEntry}
                 />
+
+                <div>
+                  <Label htmlFor="location-details">
+                    Location Details
+                    {skipAddressEntry && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  <Textarea
+                    id="location-details"
+                    placeholder="Building, floor, room number, area, or specific location details..."
+                    {...form.register("location.details")}
+                    rows={3}
+                    required={skipAddressEntry}
+                  />
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                    {skipAddressEntry 
+                      ? "Provide detailed location information since address lookup is disabled"
+                      : "Additional details about the specific location within the address"
+                    }
+                  </p>
+                </div>
+
                 {form.formState.errors.location?.address && (
                   <p className="text-red-600 text-sm mt-1">
                     {form.formState.errors.location.address.message}
+                  </p>
+                )}
+                {form.formState.errors.location?.details && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {form.formState.errors.location.details.message}
                   </p>
                 )}
               </div>
