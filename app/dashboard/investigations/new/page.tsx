@@ -6,12 +6,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Upload, X, Target } from "lucide-react";
+import EmployerSelector from "@/components/EmployerSelector";
+import ImageAnnotation from "@/components/ImageAnnotation";
 
 interface Report {
   _id: string;
@@ -26,54 +27,26 @@ interface Report {
 interface Casualty {
   name: string;
   age?: number;
-  gender?: string;
-  position?: string;
-  department?: string;
-  employeeId?: string;
   status: string;
   injuryType?: string;
-  injurySeverity?: string;
   causeOfDeath?: string;
   hospitalName?: string;
-  treatmentDetails?: string;
-  contactNumber?: string;
   nextOfKinName?: string;
   nextOfKinContact?: string;
-  notes?: string;
 }
 
-interface EmployerInfo {
-  companyName: string;
-  companyRegistrationNumber: string;
-  industry: string;
-  companySize: string;
-  primaryContact: {
-    name: string;
-    position: string;
-    email: string;
-    phone: string;
-  };
-  safetyOfficer: {
-    name: string;
-    position: string;
-    email: string;
-    phone: string;
-    certifications: string[];
-  };
-  address: {
-    street: string;
-    city: string;
-    region: string;
-    country: string;
-    postalCode: string;
-  };
-  previousIncidents: number;
-  lastSafetyAuditDate: string;
-  safetyRating: string;
-  complianceStatus: string;
-  insuranceProvider: string;
-  insurancePolicyNumber: string;
-  notes: string;
+interface FileWithAnnotations {
+  file: File;
+  annotations: Array<{
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    normalizedX: number;
+    normalizedY: number;
+    normalizedRadius: number;
+  }>;
+  url?: string;
 }
 
 export default function NewInvestigationPage() {
@@ -83,78 +56,53 @@ export default function NewInvestigationPage() {
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedEmployerId, setSelectedEmployerId] = useState<string>("");
+  const [files, setFiles] = useState<FileWithAnnotations[]>([]);
+  const [annotatingFile, setAnnotatingFile] = useState<number | null>(null);
   
-  // Form data
   const [formData, setFormData] = useState({
     originalReportId: searchParams.get('reportId') || '',
     title: '',
     investigationStartDate: new Date().toISOString().split('T')[0],
     investigationEndDate: '',
     incidentCause: '',
-    rootCauses: [''],
-    contributingFactors: [''],
-    totalPeopleAffected: 0,
     investigationMethod: '',
-    evidenceCollected: [''],
-    witnessStatements: [''],
-    expertConsultations: [''],
-    environmentalDamage: '',
-    cleanupRequired: false,
-    cleanupStatus: '',
-    estimatedCleanupCost: '',
-    estimatedDirectCosts: '',
-    estimatedIndirectCosts: '',
-    insuranceClaim: false,
-    claimAmount: '',
-    regulatoryNotificationRequired: false,
-    regulatoryBodiesNotified: [''],
-    complianceIssues: [''],
-    immediateActions: [''],
-    shortTermActions: [''],
-    longTermActions: [''],
-    preventiveMeasures: [''],
-  });
-
-  // Employer information
-  const [employerInfo, setEmployerInfo] = useState({
-    companyName: '',
-    companyRegistrationNumber: '',
-    industry: '',
-    companySize: 'MEDIUM',
-    primaryContact: {
-      name: '',
-      position: '',
-      email: '',
-      phone: ''
+    employerInfo: {
+      employerId: '',
+      companyName: '',
+      companyRegistrationNumber: '',
+      industry: '',
+      companySize: 'SMALL' as 'SMALL' | 'MEDIUM' | 'LARGE' | 'ENTERPRISE',
+      primaryContact: {
+        name: '',
+        position: '',
+        email: '',
+        phone: '',
+      },
+      safetyOfficer: {
+        name: '',
+        position: '',
+        email: '',
+        phone: '',
+        certifications: [] as string[],
+      },
+      address: {
+        street: '',
+        city: '',
+        region: '',
+        country: 'Guyana',
+      },
+      previousIncidents: 0,
+      lastSafetyAuditDate: '',
+      complianceStatus: 'UNDER_REVIEW' as 'COMPLIANT' | 'NON_COMPLIANT' | 'UNDER_REVIEW',
+      insuranceProvider: '',
+      insurancePolicyNumber: '',
+      notes: '',
     },
-    safetyOfficer: {
-      name: '',
-      position: '',
-      email: '',
-      phone: '',
-      certifications: ['']
-    },
-    address: {
-      street: '',
-      city: '',
-      region: '',
-      country: 'Guyana',
-      postalCode: ''
-    },
-    previousIncidents: 0,
-    lastSafetyAuditDate: '',
-    safetyRating: '',
-    complianceStatus: 'UNDER_REVIEW',
-    insuranceProvider: '',
-    insurancePolicyNumber: '',
-    notes: ''
   });
 
   const [casualties, setCasualties] = useState<Casualty[]>([
-    {
-      name: '',
-      status: 'INJURED',
-    }
+    { name: '', status: 'INJURED' }
   ]);
 
   useEffect(() => {
@@ -203,67 +151,132 @@ export default function NewInvestigationPage() {
     setCasualties(casualties.filter((_, i) => i !== index));
   };
 
-  const updateCasualty = (index: number, field: string, value: string | number) => {
-    const updated = [...casualties];
-    updated[index] = { ...updated[index], [field]: value };
-    setCasualties(updated);
+  const updateCasualty = (index: number, field: keyof Casualty, value: string | number | undefined) => {
+    setCasualties(casualties.map((casualty, i) => 
+      i === index ? { ...casualty, [field]: value } : casualty
+    ));
   };
 
-  const addArrayItem = (field: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: [...(prev[field] as string[]), '']
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    
+    const newFiles = Array.from(e.target.files);
+    const valid = newFiles.filter(file => {
+      const types = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/avi', 'application/pdf'];
+      const size = 10 * 1024 * 1024;
+      return types.includes(file.type) && file.size <= size;
+    });
+    
+    const filesWithAnnotations = valid.map(file => ({
+      file,
+      annotations: [],
+      url: URL.createObjectURL(file)
     }));
+    
+    setFiles(prev => [...prev, ...filesWithAnnotations]);
   };
 
-  const removeArrayItem = (field: string, index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: (prev[field] as string[]).filter((_, i) => i !== index)
-    }));
+  const removeFile = (index: number) => {
+    const fileToRemove = files[index];
+    if (fileToRemove.url) {
+      URL.revokeObjectURL(fileToRemove.url);
+    }
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateArrayItem = (field: string, index: number, value: string) => {
+  const startAnnotation = (index: number) => {
+    const file = files[index];
+    if (file.file.type.startsWith('image/')) {
+      setAnnotatingFile(index);
+    }
+  };
+
+  const handleAnnotationComplete = (index: number, annotations: any[]) => {
+    setFiles(prev => prev.map((file, i) => 
+      i === index ? { ...file, annotations } : file
+    ));
+    setAnnotatingFile(null);
+  };
+
+  const handleAnnotationCancel = () => {
+    setAnnotatingFile(null);
+  };
+
+  const handleEmployerSelect = (employer: any) => {
+    setSelectedEmployerId(employer._id);
     setFormData(prev => ({
       ...prev,
-      [field]: (prev[field] as string[]).map((item, i) => i === index ? value : item)
+      employerInfo: {
+        employerId: employer._id,
+        companyName: employer.name,
+        companyRegistrationNumber: employer.registrationNumber || '',
+        industry: employer.industry,
+        companySize: employer.companySize.toUpperCase() as 'SMALL' | 'MEDIUM' | 'LARGE' | 'ENTERPRISE',
+        primaryContact: {
+          name: employer.primaryContact?.name || '',
+          position: employer.primaryContact?.position || '',
+          email: employer.primaryContact?.email || '',
+          phone: employer.primaryContact?.phone || '',
+        },
+        safetyOfficer: {
+          name: '',
+          position: '',
+          email: '',
+          phone: '',
+          certifications: [],
+        },
+        address: {
+          street: employer.address?.street || '',
+          city: employer.address?.city || '',
+          region: employer.address?.region || '',
+          country: employer.address?.country || 'Guyana',
+          postalCode: employer.address?.postalCode || '',
+        },
+        previousIncidents: 0,
+        lastSafetyAuditDate: '',
+        complianceStatus: (employer.complianceStatus?.toUpperCase() as 'COMPLIANT' | 'NON_COMPLIANT' | 'UNDER_REVIEW') || 'UNDER_REVIEW',
+        insuranceProvider: '',
+        insurancePolicyNumber: '',
+        notes: ''
+      }
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.originalReportId || !formData.title) return;
+    if (!formData.originalReportId || !formData.title || !formData.employerInfo.companyName) return;
 
     setLoading(true);
     try {
+      // Upload files first
+      const uploadedFiles = [];
+      for (const fileWithAnnotations of files) {
+        const formData = new FormData();
+        formData.append('file', fileWithAnnotations.file);
+        
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (res.ok) {
+          const result = await res.json();
+          const attachmentData = {
+            url: result.url,
+            fileName: fileWithAnnotations.file.name,
+            fileType: fileWithAnnotations.file.type,
+            fileSize: fileWithAnnotations.file.size,
+            annotations: fileWithAnnotations.annotations,
+          };
+          uploadedFiles.push(attachmentData);
+        }
+      }
+
       const payload = {
         ...formData,
-        employerInfo: {
-          ...employerInfo,
-          safetyOfficer: {
-            ...employerInfo.safetyOfficer,
-            certifications: employerInfo.safetyOfficer.certifications.filter(c => c.trim())
-          },
-          previousIncidents: typeof employerInfo.previousIncidents === 'string' ? parseInt(employerInfo.previousIncidents) || 0 : employerInfo.previousIncidents,
-          lastSafetyAuditDate: employerInfo.lastSafetyAuditDate || undefined
-        },
         casualties: casualties.filter(c => c.name.trim()),
         totalPeopleAffected: casualties.filter(c => c.name.trim()).length,
-        rootCauses: formData.rootCauses.filter(c => c.trim()),
-        contributingFactors: formData.contributingFactors.filter(c => c.trim()),
-        evidenceCollected: formData.evidenceCollected.filter(c => c.trim()),
-        witnessStatements: formData.witnessStatements.filter(c => c.trim()),
-        expertConsultations: formData.expertConsultations.filter(c => c.trim()),
-        regulatoryBodiesNotified: formData.regulatoryBodiesNotified.filter(c => c.trim()),
-        complianceIssues: formData.complianceIssues.filter(c => c.trim()),
-        immediateActions: formData.immediateActions.filter(c => c.trim()),
-        shortTermActions: formData.shortTermActions.filter(c => c.trim()),
-        longTermActions: formData.longTermActions.filter(c => c.trim()),
-        preventiveMeasures: formData.preventiveMeasures.filter(c => c.trim()),
-        estimatedCleanupCost: formData.estimatedCleanupCost ? parseFloat(formData.estimatedCleanupCost) : undefined,
-        estimatedDirectCosts: formData.estimatedDirectCosts ? parseFloat(formData.estimatedDirectCosts) : undefined,
-        estimatedIndirectCosts: formData.estimatedIndirectCosts ? parseFloat(formData.estimatedIndirectCosts) : undefined,
-        claimAmount: formData.claimAmount ? parseFloat(formData.claimAmount) : undefined,
+        attachments: uploadedFiles,
       };
 
       const response = await fetch("/api/investigations", {
@@ -375,245 +388,279 @@ export default function NewInvestigationPage() {
             <CardTitle>Employer Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Company Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="companyName">Company Name *</Label>
-                <Input
-                  id="companyName"
-                  value={employerInfo.companyName}
-                  onChange={(e) => setEmployerInfo(prev => ({ ...prev, companyName: e.target.value }))}
-                  placeholder="Enter company name"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="companyRegistrationNumber">Registration Number</Label>
-                <Input
-                  id="companyRegistrationNumber"
-                  value={employerInfo.companyRegistrationNumber}
-                  onChange={(e) => setEmployerInfo(prev => ({ ...prev, companyRegistrationNumber: e.target.value }))}
-                  placeholder="Company registration number"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="industry">Industry *</Label>
-                <Select
-                  value={employerInfo.industry}
-                  onValueChange={(value) => setEmployerInfo(prev => ({ ...prev, industry: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select industry" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Mining">Mining</SelectItem>
-                    <SelectItem value="Oil & Gas">Oil & Gas</SelectItem>
-                    <SelectItem value="Construction">Construction</SelectItem>
-                    <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                    <SelectItem value="Agriculture">Agriculture</SelectItem>
-                    <SelectItem value="Forestry">Forestry</SelectItem>
-                    <SelectItem value="Transportation">Transportation</SelectItem>
-                    <SelectItem value="Healthcare">Healthcare</SelectItem>
-                    <SelectItem value="Education">Education</SelectItem>
-                    <SelectItem value="Tourism">Tourism</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="companySize">Company Size *</Label>
-                <Select
-                  value={employerInfo.companySize}
-                  onValueChange={(value) => setEmployerInfo(prev => ({ ...prev, companySize: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SMALL">Small (< 50 employees)</SelectItem>
-                    <SelectItem value="MEDIUM">Medium (50-249 employees)</SelectItem>
-                    <SelectItem value="LARGE">Large (250-999 employees)</SelectItem>
-                    <SelectItem value="ENTERPRISE">Enterprise (1000+ employees)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Company Address */}
+            {/* Employer Selector */}
             <div>
-              <h4 className="font-medium mb-3">Company Address</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <Label htmlFor="street">Street Address *</Label>
-                  <Input
-                    id="street"
-                    value={employerInfo.address.street}
-                    onChange={(e) => setEmployerInfo(prev => ({
-                      ...prev,
-                      address: { ...prev.address, street: e.target.value }
-                    }))}
-                    placeholder="Street address"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="city">City *</Label>
-                  <Input
-                    id="city"
-                    value={employerInfo.address.city}
-                    onChange={(e) => setEmployerInfo(prev => ({
-                      ...prev,
-                      address: { ...prev.address, city: e.target.value }
-                    }))}
-                    placeholder="City"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="region">Region *</Label>
-                  <Select
-                    value={employerInfo.address.region}
-                    onValueChange={(value) => setEmployerInfo(prev => ({
-                      ...prev,
-                      address: { ...prev.address, region: value }
-                    }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select region" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Barima-Waini">Barima-Waini</SelectItem>
-                      <SelectItem value="Cuyuni-Mazaruni">Cuyuni-Mazaruni</SelectItem>
-                      <SelectItem value="Demerara-Mahaica">Demerara-Mahaica</SelectItem>
-                      <SelectItem value="East Berbice-Corentyne">East Berbice-Corentyne</SelectItem>
-                      <SelectItem value="Essequibo Islands-West Demerara">Essequibo Islands-West Demerara</SelectItem>
-                      <SelectItem value="Mahaica-Berbice">Mahaica-Berbice</SelectItem>
-                      <SelectItem value="Pomeroon-Supenaam">Pomeroon-Supenaam</SelectItem>
-                      <SelectItem value="Potaro-Siparuni">Potaro-Siparuni</SelectItem>
-                      <SelectItem value="Upper Demerara-Berbice">Upper Demerara-Berbice</SelectItem>
-                      <SelectItem value="Upper Takutu-Upper Essequibo">Upper Takutu-Upper Essequibo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              <Label htmlFor="employer">Select Employer *</Label>
+              <EmployerSelector
+                value={selectedEmployerId}
+                onSelect={handleEmployerSelect}
+                required
+              />
             </div>
 
-            {/* Primary Contact */}
-            <div>
-              <h4 className="font-medium mb-3">Primary Contact</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="primaryContactName">Name *</Label>
-                  <Input
-                    id="primaryContactName"
-                    value={employerInfo.primaryContact.name}
-                    onChange={(e) => setEmployerInfo(prev => ({
-                      ...prev,
-                      primaryContact: { ...prev.primaryContact, name: e.target.value }
-                    }))}
-                    placeholder="Contact person name"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="primaryContactPosition">Position *</Label>
-                  <Input
-                    id="primaryContactPosition"
-                    value={employerInfo.primaryContact.position}
-                    onChange={(e) => setEmployerInfo(prev => ({
-                      ...prev,
-                      primaryContact: { ...prev.primaryContact, position: e.target.value }
-                    }))}
-                    placeholder="Job title"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="primaryContactEmail">Email *</Label>
-                  <Input
-                    id="primaryContactEmail"
-                    type="email"
-                    value={employerInfo.primaryContact.email}
-                    onChange={(e) => setEmployerInfo(prev => ({
-                      ...prev,
-                      primaryContact: { ...prev.primaryContact, email: e.target.value }
-                    }))}
-                    placeholder="email@company.com"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="primaryContactPhone">Phone *</Label>
-                  <Input
-                    id="primaryContactPhone"
-                    value={employerInfo.primaryContact.phone}
-                    onChange={(e) => setEmployerInfo(prev => ({
-                      ...prev,
-                      primaryContact: { ...prev.primaryContact, phone: e.target.value }
-                    }))}
-                    placeholder="Phone number"
-                    required
-                  />
+            {/* Selected Employer Info Display */}
+            {selectedEmployerId && formData.employerInfo.companyName && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-3">Selected Employer Details:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p><strong>Company Name:</strong> {formData.employerInfo.companyName}</p>
+                    <p><strong>Industry:</strong> {formData.employerInfo.industry}</p>
+                    <p><strong>Company Size:</strong> {formData.employerInfo.companySize}</p>
+                  </div>
+                  <div>
+                    <p><strong>Compliance Status:</strong> {formData.employerInfo.complianceStatus.replace('_', ' ')}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Safety Information */}
-            <div>
-              <h4 className="font-medium mb-3">Safety & Compliance</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Investigation-specific Employer Details */}
+            {selectedEmployerId && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="registrationNumber">Company Registration Number</Label>
+                    <Input
+                      id="registrationNumber"
+                      value={formData.employerInfo.companyRegistrationNumber}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        employerInfo: { ...prev.employerInfo, companyRegistrationNumber: e.target.value } 
+                      }))}
+                      placeholder="Enter registration number"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="previousIncidents">Previous Incidents Count</Label>
+                    <Input
+                      id="previousIncidents"
+                      type="number"
+                      min="0"
+                      value={formData.employerInfo.previousIncidents}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        employerInfo: { ...prev.employerInfo, previousIncidents: parseInt(e.target.value) || 0 } 
+                      }))}
+                      placeholder="Number of previous incidents"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <Label htmlFor="previousIncidents">Previous Incidents (Count)</Label>
+                  <Label htmlFor="lastSafetyAuditDate">Last Safety Audit Date</Label>
                   <Input
-                    id="previousIncidents"
-                    type="number"
-                    min="0"
-                    value={employerInfo.previousIncidents}
-                    onChange={(e) => setEmployerInfo(prev => ({ 
+                    id="lastSafetyAuditDate"
+                    type="date"
+                    value={formData.employerInfo.lastSafetyAuditDate}
+                    onChange={(e) => setFormData(prev => ({ 
                       ...prev, 
-                      previousIncidents: parseInt(e.target.value) || 0 
+                      employerInfo: { ...prev.employerInfo, lastSafetyAuditDate: e.target.value } 
                     }))}
-                    placeholder="0"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="safetyRating">Safety Rating</Label>
-                  <Select
-                    value={employerInfo.safetyRating}
-                    onValueChange={(value) => setEmployerInfo(prev => ({ ...prev, safetyRating: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select rating" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EXCELLENT">Excellent</SelectItem>
-                      <SelectItem value="GOOD">Good</SelectItem>
-                      <SelectItem value="FAIR">Fair</SelectItem>
-                      <SelectItem value="POOR">Poor</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                {/* Primary Contact Details */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg">Primary Contact Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="primaryContactName">Contact Name *</Label>
+                      <Input
+                        id="primaryContactName"
+                        value={formData.employerInfo.primaryContact.name}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            primaryContact: { ...prev.employerInfo.primaryContact, name: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Contact person name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="primaryContactPosition">Position *</Label>
+                      <Input
+                        id="primaryContactPosition"
+                        value={formData.employerInfo.primaryContact.position}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            primaryContact: { ...prev.employerInfo.primaryContact, position: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Job title/position"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    <p><strong>Email:</strong> {formData.employerInfo.primaryContact.email || 'Not provided'}</p>
+                    <p><strong>Phone:</strong> {formData.employerInfo.primaryContact.phone || 'Not provided'}</p>
+                  </div>
                 </div>
+
+                {/* Safety Officer Details */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg">Safety Officer Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="safetyOfficerName">Safety Officer Name</Label>
+                      <Input
+                        id="safetyOfficerName"
+                        value={formData.employerInfo.safetyOfficer.name}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            safetyOfficer: { ...prev.employerInfo.safetyOfficer, name: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Safety officer name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="safetyOfficerPosition">Position</Label>
+                      <Input
+                        id="safetyOfficerPosition"
+                        value={formData.employerInfo.safetyOfficer.position}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            safetyOfficer: { ...prev.employerInfo.safetyOfficer, position: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Safety officer position"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="safetyOfficerEmail">Email</Label>
+                      <Input
+                        id="safetyOfficerEmail"
+                        type="email"
+                        value={formData.employerInfo.safetyOfficer.email}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            safetyOfficer: { ...prev.employerInfo.safetyOfficer, email: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Safety officer email"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="safetyOfficerPhone">Phone</Label>
+                      <Input
+                        id="safetyOfficerPhone"
+                        type="tel"
+                        value={formData.employerInfo.safetyOfficer.phone}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            safetyOfficer: { ...prev.employerInfo.safetyOfficer, phone: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Safety officer phone"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Company Address Details */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg">Company Address</h4>
+                  <div className="text-sm text-gray-600 mb-2">
+                    <p><strong>Street Address:</strong> {formData.employerInfo.address.street || 'Not provided'}</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="addressCity">City *</Label>
+                      <Input
+                        id="addressCity"
+                        value={formData.employerInfo.address.city}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            address: { ...prev.employerInfo.address, city: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="City"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressRegion">Region *</Label>
+                      <Input
+                        id="addressRegion"
+                        value={formData.employerInfo.address.region}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { 
+                            ...prev.employerInfo, 
+                            address: { ...prev.employerInfo.address, region: e.target.value } 
+                          } 
+                        }))}
+                        placeholder="Region"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Insurance Information */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-lg">Insurance Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="insuranceProvider">Insurance Provider</Label>
+                      <Input
+                        id="insuranceProvider"
+                        value={formData.employerInfo.insuranceProvider}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { ...prev.employerInfo, insuranceProvider: e.target.value } 
+                        }))}
+                        placeholder="Insurance company name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="insurancePolicyNumber">Policy Number</Label>
+                      <Input
+                        id="insurancePolicyNumber"
+                        value={formData.employerInfo.insurancePolicyNumber}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          employerInfo: { ...prev.employerInfo, insurancePolicyNumber: e.target.value } 
+                        }))}
+                        placeholder="Insurance policy number"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Notes */}
                 <div>
-                  <Label htmlFor="complianceStatus">Compliance Status *</Label>
-                  <Select
-                    value={employerInfo.complianceStatus}
-                    onValueChange={(value) => setEmployerInfo(prev => ({ ...prev, complianceStatus: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="COMPLIANT">Compliant</SelectItem>
-                      <SelectItem value="NON_COMPLIANT">Non-Compliant</SelectItem>
-                      <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="employerNotes">Additional Notes</Label>
+                  <Textarea
+                    id="employerNotes"
+                    value={formData.employerInfo.notes}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      employerInfo: { ...prev.employerInfo, notes: e.target.value } 
+                    }))}
+                    placeholder="Any additional information about the employer relevant to this investigation"
+                    rows={3}
+                  />
                 </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -660,7 +707,7 @@ export default function NewInvestigationPage() {
                     <Input
                       type="number"
                       value={casualty.age || ''}
-                      onChange={(e) => updateCasualty(index, 'age', parseInt(e.target.value) || '')}
+                      onChange={(e) => updateCasualty(index, 'age', parseInt(e.target.value) || undefined)}
                       placeholder="Age"
                     />
                   </div>
@@ -741,6 +788,82 @@ export default function NewInvestigationPage() {
           </CardContent>
         </Card>
 
+        {/* Evidence and Documentation */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Evidence & Documentation</CardTitle>
+            <CardDescription>Upload photos, videos, or documents related to the investigation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center hover:border-gray-300 transition-colors">
+              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600 mb-2">Upload evidence files</p>
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*,application/pdf"
+                onChange={handleFiles}
+                className="hidden"
+                id="evidence-upload"
+              />
+              <Button 
+                type="button" 
+                variant="outline"
+                onClick={() => document.getElementById('evidence-upload')?.click()}
+              >
+                Choose Files
+              </Button>
+              <p className="text-sm text-gray-500 mt-2">
+                Images, Videos, PDFs • Max 10MB per file
+              </p>
+            </div>
+
+            {files.length > 0 && (
+              <div className="space-y-2">
+                {files.map((fileWithAnnotations, index) => (
+                  <div key={index} className="bg-gray-50 p-3 rounded-md">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm">
+                        <p className="font-medium">{fileWithAnnotations.file.name}</p>
+                        <p className="text-gray-500">
+                          {(fileWithAnnotations.file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                        {fileWithAnnotations.annotations.length > 0 && (
+                          <p className="text-green-600 text-xs mt-1">
+                            {fileWithAnnotations.annotations.length} annotation(s) added
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {fileWithAnnotations.file.type.startsWith('image/') && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => startAnnotation(index)}
+                            title="Mark specific areas in this image"
+                          >
+                            <Target className="w-4 h-4 mr-1" />
+                            Annotate
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(index)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Investigation Details */}
         <Card>
           <CardHeader>
@@ -787,6 +910,17 @@ export default function NewInvestigationPage() {
           </Button>
         </div>
       </form>
+
+      {/* Image Annotation Modal */}
+      {annotatingFile !== null && files[annotatingFile] && (
+        <ImageAnnotation
+          imageUrl={files[annotatingFile].url!}
+          fileName={files[annotatingFile].file.name}
+          onAnnotationComplete={(annotations) => handleAnnotationComplete(annotatingFile, annotations)}
+          onCancel={handleAnnotationCancel}
+          initialAnnotations={files[annotatingFile].annotations}
+        />
+      )}
     </div>
   );
 }

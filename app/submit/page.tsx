@@ -18,36 +18,23 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const schema = z.object({
-  incidentDate: z.string().min(1, "Date required"),
-  incidentTime: z.string().min(1, "Time required"),
+  incidentDate: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || new Date().toISOString().split('T')[0]),
+  incidentTime: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || new Date().toTimeString().slice(0, 5)),
   location: z.object({
-    address: z.string(),
-    lat: z.number(),
-    lng: z.number(),
-    details: z.string().optional(),
+    address: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
+    lat: z.union([z.number(), z.null(), z.undefined()]).transform(val => val || 0),
+    lng: z.union([z.number(), z.null(), z.undefined()]).transform(val => val || 0),
+    details: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
   }),
-  skipAddressEntry: z.boolean().optional(),
-  industry: z.string().optional(),
-  incidentType: z.string().optional(),
-  regulationBreached: z.string().optional(),
-  severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
-  description: z.string().min(20, "Description too short"),
-  reporterEmail: z.string().email().optional().or(z.literal("")),
-  reporterPhone: z.string().optional(),
-  isAnonymous: z.boolean(),
-}).refine((data) => {
-  // If skip address entry is enabled, require location details
-  if (data.skipAddressEntry && (!data.location.details || data.location.details.trim().length < 10)) {
-    return false;
-  }
-  // If skip address entry is disabled, require valid address
-  if (!data.skipAddressEntry && (!data.location.address || data.location.address.trim().length < 5)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Valid location information is required",
-  path: ["location"]
+  skipAddressEntry: z.union([z.boolean(), z.null(), z.undefined()]).transform(val => val || false),
+  industry: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
+  incidentType: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
+  regulationBreached: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
+  severityLevel: z.union([z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]), z.null(), z.undefined()]).transform(val => val || "MEDIUM"),
+  description: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || "Incident occurred"),
+  reporterEmail: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
+  reporterPhone: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || ""),
+  isAnonymous: z.union([z.boolean(), z.null(), z.undefined()]).transform(val => val !== false),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -81,12 +68,20 @@ export default function SubmitReport() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
+    mode: "onChange",
     defaultValues: {
       incidentDate: new Date().toISOString().split('T')[0],
       incidentTime: new Date().toTimeString().slice(0, 5),
       isAnonymous: true,
+      severityLevel: "MEDIUM",
       location: { address: "", lat: 0, lng: 0, details: "" },
       skipAddressEntry: false,
+      description: "",
+      reporterEmail: "",
+      reporterPhone: "",
+      industry: "",
+      incidentType: "",
+      regulationBreached: "",
     },
   });
 
@@ -171,6 +166,9 @@ export default function SubmitReport() {
   };
 
   const onSubmit = async (data: FormData) => {
+    console.log("Form data being submitted:", data);
+    console.log("Form errors:", form.formState.errors);
+    
     setError("");
     setSubmitting(true);
 
@@ -517,6 +515,7 @@ export default function SubmitReport() {
                               variant="outline"
                               size="sm"
                               onClick={() => startAnnotation(index)}
+                              title="Mark specific areas in this image"
                             >
                               <Target className="w-4 h-4 mr-1" />
                               Annotate
@@ -701,6 +700,16 @@ export default function SubmitReport() {
               {submitting ? "Submitting..." : "Submit Report"}
             </Button>
           </div>
+          
+          {/* Debug info */}
+          {/* {Object.keys(form.formState.errors).length > 0 && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+              <h3 className="font-medium text-red-800 mb-2">Form Validation Errors:</h3>
+              <pre className="text-sm text-red-700 whitespace-pre-wrap">
+                {JSON.stringify(form.formState.errors, null, 2)}
+              </pre>
+            </div>
+          )} */}
         </form>
 
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-md p-4">

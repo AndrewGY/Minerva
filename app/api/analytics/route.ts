@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/mongodb';
 import Report from '@/models/Report';
 import InvestigationReport from '@/models/InvestigationReport';
+import Employer from '@/models/Employer';
 
 export async function GET(request: NextRequest) {
   try {
@@ -264,11 +265,27 @@ export async function GET(request: NextRequest) {
       }
     ]);
 
-    // Employer analytics from investigation reports
+    // Employer analytics from investigation reports with real employer data
     const employerStats = await InvestigationReport.aggregate([
       {
+        $lookup: {
+          from: 'employers',
+          localField: 'employerInfo.employerId',
+          foreignField: '_id',
+          as: 'employer'
+        }
+      },
+      {
+        $unwind: {
+          path: '$employer',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
         $group: {
-          _id: '$employerInfo.companyName',
+          _id: {
+            $ifNull: ['$employer.name', '$employerInfo.companyName']
+          },
           totalIncidents: { $sum: 1 },
           criticalIncidents: {
             $sum: {
@@ -279,11 +296,26 @@ export async function GET(request: NextRequest) {
               ]
             }
           },
-          industry: { $first: '$employerInfo.industry' },
-          companySize: { $first: '$employerInfo.companySize' },
-          complianceStatus: { $first: '$employerInfo.complianceStatus' },
-          safetyRating: { $first: '$employerInfo.safetyRating' },
-          previousIncidents: { $first: '$employerInfo.previousIncidents' },
+          industry: { 
+            $first: {
+              $ifNull: ['$employer.industry', '$employerInfo.industry']
+            }
+          },
+          companySize: { 
+            $first: {
+              $ifNull: ['$employer.companySize', '$employerInfo.companySize']
+            }
+          },
+          complianceStatus: { 
+            $first: {
+              $ifNull: ['$employer.complianceStatus', '$employerInfo.complianceStatus']
+            }
+          },
+          riskScore: { 
+            $first: {
+              $ifNull: ['$employer.riskScore', 0]
+            }
+          },
           totalCasualties: { $sum: '$totalPeopleAffected' },
           avgFinancialImpact: {
             $avg: {
@@ -317,13 +349,33 @@ export async function GET(request: NextRequest) {
       { $limit: 20 }
     ]);
 
-    // Industry risk analysis
+    // Industry risk analysis with real employer data
     const industryRisk = await InvestigationReport.aggregate([
       {
+        $lookup: {
+          from: 'employers',
+          localField: 'employerInfo.employerId',
+          foreignField: '_id',
+          as: 'employer'
+        }
+      },
+      {
+        $unwind: {
+          path: '$employer',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
         $group: {
-          _id: '$employerInfo.industry',
+          _id: {
+            $ifNull: ['$employer.industry', '$employerInfo.industry']
+          },
           totalIncidents: { $sum: 1 },
-          totalCompanies: { $addToSet: '$employerInfo.companyName' },
+          totalCompanies: { 
+            $addToSet: {
+              $ifNull: ['$employer.name', '$employerInfo.companyName']
+            }
+          },
           criticalIncidents: {
             $sum: {
               $cond: [
@@ -355,11 +407,27 @@ export async function GET(request: NextRequest) {
       { $sort: { incidentRate: -1 } }
     ]);
 
-    // Compliance distribution
+    // Compliance distribution with real employer data
     const complianceDistribution = await InvestigationReport.aggregate([
       {
+        $lookup: {
+          from: 'employers',
+          localField: 'employerInfo.employerId',
+          foreignField: '_id',
+          as: 'employer'
+        }
+      },
+      {
+        $unwind: {
+          path: '$employer',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
         $group: {
-          _id: '$employerInfo.complianceStatus',
+          _id: {
+            $ifNull: ['$employer.complianceStatus', '$employerInfo.complianceStatus']
+          },
           count: { $sum: 1 },
           companies: { $addToSet: '$employerInfo.companyName' }
         }

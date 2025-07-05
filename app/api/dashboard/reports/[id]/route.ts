@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectToDatabase from "@/lib/mongodb";
 import Report from "@/models/Report";
 import { Resend } from 'resend';
+import { headers, cookies } from "next/headers";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -12,6 +13,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const headersList = await headers();
+    const cookieStore = await cookies();
+    
     const session = await getServerSession(authOptions);
     
     if (!session || (session.user as any)?.role !== "ADMIN") {
@@ -39,6 +43,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const headersList = await headers();
+    const cookieStore = await cookies();
+    
     const session = await getServerSession(authOptions);
     
     if (!session || (session.user as any)?.role !== "ADMIN") {

@@ -41,6 +41,7 @@ export interface IReport extends Document {
   status: 'RECEIVED' | 'UNDER_REVIEW' | 'VERIFIED' | 'RESOLVED' | 'CLOSED';
   assignedOfficerId?: mongoose.Types.ObjectId;
   attachments: IAttachment[];
+  employerId?: mongoose.Types.ObjectId;
   metadata?: {
     source?: string;
     articleUrl?: string;
@@ -115,6 +116,10 @@ const reportSchema = new Schema<IReport>(
     },
     reporterEmail: String,
     reporterPhone: String,
+    employerId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Employer',
+    },
     isAnonymous: {
       type: Boolean,
       default: true,

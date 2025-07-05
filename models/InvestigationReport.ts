@@ -20,6 +20,7 @@ export interface ICasualty {
 }
 
 export interface IEmployerInfo {
+  employerId?: mongoose.Types.ObjectId; // Reference to Employer model
   companyName: string;
   companyRegistrationNumber?: string;
   industry: string;
@@ -46,7 +47,6 @@ export interface IEmployerInfo {
   };
   previousIncidents?: number;
   lastSafetyAuditDate?: Date;
-  safetyRating?: 'POOR' | 'FAIR' | 'GOOD' | 'EXCELLENT';
   complianceStatus: 'COMPLIANT' | 'NON_COMPLIANT' | 'UNDER_REVIEW';
   insuranceProvider?: string;
   insurancePolicyNumber?: string;
@@ -76,6 +76,21 @@ export interface IInvestigationReport extends Document {
   // Investigation Details
   investigationMethod: string;
   evidenceCollected: string[];
+  attachments: Array<{
+    url: string;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    annotations: Array<{
+      id: string;
+      x: number;
+      y: number;
+      radius: number;
+      normalizedX: number;
+      normalizedY: number;
+      normalizedRadius: number;
+    }>;
+  }>;
   witnessStatements: string[];
   expertConsultations: string[];
   
@@ -151,6 +166,10 @@ const casualtySchema = new Schema<ICasualty>({
 });
 
 const employerInfoSchema = new Schema<IEmployerInfo>({
+  employerId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Employer',
+  },
   companyName: { type: String, required: true },
   companyRegistrationNumber: String,
   industry: { type: String, required: true },
@@ -181,10 +200,6 @@ const employerInfoSchema = new Schema<IEmployerInfo>({
   },
   previousIncidents: { type: Number, default: 0 },
   lastSafetyAuditDate: Date,
-  safetyRating: {
-    type: String,
-    enum: ['POOR', 'FAIR', 'GOOD', 'EXCELLENT'],
-  },
   complianceStatus: {
     type: String,
     enum: ['COMPLIANT', 'NON_COMPLIANT', 'UNDER_REVIEW'],
@@ -252,6 +267,21 @@ const investigationReportSchema = new Schema<IInvestigationReport>(
       required: true,
     },
     evidenceCollected: [String],
+    attachments: [{
+      url: { type: String, required: true },
+      fileName: { type: String, required: true },
+      fileType: { type: String, required: true },
+      fileSize: { type: Number, required: true },
+      annotations: [{
+        id: { type: String, required: true },
+        x: { type: Number, required: true },
+        y: { type: Number, required: true },
+        radius: { type: Number, required: true },
+        normalizedX: { type: Number, required: true },
+        normalizedY: { type: Number, required: true },
+        normalizedRadius: { type: Number, required: true },
+      }],
+    }],
     witnessStatements: [String],
     expertConsultations: [String],
     
@@ -327,7 +357,6 @@ investigationReportSchema.index({ publicId: 1 });
 investigationReportSchema.index({ 'employerInfo.companyName': 1 });
 investigationReportSchema.index({ 'employerInfo.industry': 1 });
 investigationReportSchema.index({ 'employerInfo.complianceStatus': 1 });
-investigationReportSchema.index({ 'employerInfo.safetyRating': 1 });
 
 // Force recompilation to pick up schema changes  
 if (mongoose.models.InvestigationReport) {

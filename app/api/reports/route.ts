@@ -4,20 +4,23 @@ import Report from "@/models/Report";
 import { z } from "zod";
 
 const schema = z.object({
-  incidentDate: z.string().transform(str => new Date(str)),
+  incidentDate: z.string().optional().transform(str => str ? new Date(str) : new Date()),
+  incidentTime: z.string().optional(),
   location: z.object({
-    address: z.string().min(5),
+    address: z.string().optional(),
     lat: z.number().optional(),
     lng: z.number().optional(),
+    details: z.string().optional(),
   }),
+  skipAddressEntry: z.boolean().optional(),
   industry: z.string().optional(),
   incidentType: z.string().optional(),
   regulationBreached: z.string().optional(),
   severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
-  description: z.string().min(20),
+  description: z.string().optional().transform(str => str || "Incident report"),
   reporterEmail: z.string().email().optional().or(z.literal("")),
   reporterPhone: z.string().optional(),
-  isAnonymous: z.boolean(),
+  isAnonymous: z.boolean().optional(),
   attachments: z.array(z.object({
     url: z.string(),
     fileName: z.string(),
@@ -33,7 +36,7 @@ const schema = z.object({
       normalizedRadius: z.number(),
     })).default([]),
   })).optional(),
-  recaptchaToken: z.string().min(1),
+  recaptchaToken: z.string().optional(),
 });
 
 async function verifyRecaptcha(token: string): Promise<boolean> {

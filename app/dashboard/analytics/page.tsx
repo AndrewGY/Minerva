@@ -122,7 +122,6 @@ interface AnalyticsData {
       industry: string;
       companySize: string;
       complianceStatus: string;
-      safetyRating: string;
       totalCasualties: number;
       riskScore: number;
       avgFinancialImpact: number;

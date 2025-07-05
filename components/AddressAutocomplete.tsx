@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader } from '@googlemaps/js-api-loader';
@@ -32,12 +32,32 @@ export default function AddressAutocomplete({
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [inputValue, setInputValue] = useState(value);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const initializeAutocomplete = async () => {
+  useLayoutEffect(() => {
+    if (disabled) return;
+
+    let timeoutId: NodeJS.Timeout;
+    let retryTimeoutId: NodeJS.Timeout;
+
+    const waitForDOMAndInitialize = () => {
+      if (!inputRef.current) {
+        timeoutId = setTimeout(waitForDOMAndInitialize, 50);
+        return;
+      }
+      initializeGoogleMaps();
+    };
+
+    const initializeGoogleMaps = async () => {
       try {
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+        
+        if (!apiKey) {
+          throw new Error('Google Maps API key is missing');
+        }
+        
         const loader = new Loader({
-          apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+          apiKey,
           version: 'weekly',
           libraries: ['places']
         });
@@ -46,18 +66,9 @@ export default function AddressAutocomplete({
         setIsLoaded(true);
 
         if (inputRef.current) {
-          // Create autocomplete with Guyana bounds
-          const guyanaCenter = { lat: 4.860416, lng: -58.93018 };
-          const guyanaCircle = new google.maps.Circle({
-            center: guyanaCenter,
-            radius: 500000 // 500km radius to cover all of Guyana
-          });
-
           const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
             types: ['establishment', 'geocode'],
             fields: ['formatted_address', 'geometry', 'name'],
-            bounds: guyanaCircle.getBounds()!,
-            strictBounds: true,
             componentRestrictions: { country: 'gy' }
           });
 
@@ -77,32 +88,43 @@ export default function AddressAutocomplete({
           });
 
           autocompleteRef.current = autocomplete;
+          setError(null);
+        } else {
+          throw new Error('Input element not available');
         }
       } catch (error) {
-        console.error('Error loading Google Maps API:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load Google Maps');
+        
+        if (error instanceof Error && error.message.includes('Input element not available')) {
+          retryTimeoutId = setTimeout(() => {
+            if (inputRef.current && !autocompleteRef.current) {
+              initializeGoogleMaps();
+            }
+          }, 1000);
+        }
       }
     };
 
-    if (!disabled) {
-      initializeAutocomplete();
-    }
+    waitForDOMAndInitialize();
 
     return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
       if (autocompleteRef.current) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     };
-  }, [onLocationSelect, disabled]);
+  }, [disabled]);
 
   useEffect(() => {
     setInputValue(value);
   }, [value]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
+    const newValue = e.target.value;
+    setInputValue(newValue);
     
-    // If user is typing manually and clears the field, notify parent
-    if (e.target.value === '') {
+    if (newValue === '') {
       onLocationSelect({ address: '', lat: 0, lng: 0 });
     }
   };
@@ -126,9 +148,6 @@ export default function AddressAutocomplete({
         disabled={disabled}
         className={disabled ? 'bg-gray-100 text-gray-500' : ''}
       />
-      {!isLoaded && !disabled && (
-        <p className="text-xs text-gray-500">Loading address autocomplete...</p>
-      )}
       {disabled && (
         <p className="text-xs text-gray-500">Manual location entry mode</p>
       )}

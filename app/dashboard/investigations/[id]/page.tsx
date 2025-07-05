@@ -22,7 +22,8 @@ import {
   Clock,
   Send,
   Edit,
-  Eye
+  Eye,
+  Building
 } from "lucide-react";
 
 interface Investigation {
@@ -42,6 +43,25 @@ interface Investigation {
     _id: string;
     name: string;
     email: string;
+  };
+  employerInfo: {
+    companyName: string;
+    companyRegistrationNumber?: string;
+    industry: string;
+    companySize: 'SMALL' | 'MEDIUM' | 'LARGE' | 'ENTERPRISE';
+    primaryContact: {
+      name: string;
+      position: string;
+      email: string;
+      phone: string;
+    };
+    address: {
+      street: string;
+      city: string;
+      region: string;
+      country: string;
+    };
+    complianceStatus: 'COMPLIANT' | 'NON_COMPLIANT' | 'UNDER_REVIEW';
   };
   investigationStartDate: string;
   investigationEndDate?: string;
@@ -240,6 +260,95 @@ export default function InvestigationDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Employer Information */}
+          {investigation.employerInfo && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building className="w-5 h-5" />
+                  Employer Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Company Name</p>
+                      <p className="text-base font-medium">{investigation.employerInfo.companyName}</p>
+                    </div>
+                    {investigation.employerInfo.companyRegistrationNumber && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Registration Number</p>
+                        <p className="text-base">{investigation.employerInfo.companyRegistrationNumber}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Industry</p>
+                      <p className="text-base">{investigation.employerInfo.industry}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Company Size</p>
+                      <p className="text-base">
+                        {investigation.employerInfo.companySize === 'SMALL' && 'Small (<50 employees)'}
+                        {investigation.employerInfo.companySize === 'MEDIUM' && 'Medium (50-249 employees)'}
+                        {investigation.employerInfo.companySize === 'LARGE' && 'Large (250-999 employees)'}
+                        {investigation.employerInfo.companySize === 'ENTERPRISE' && 'Enterprise (1000+ employees)'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="font-medium mb-2">Company Address</h4>
+                    <p className="text-sm text-gray-600">
+                      {investigation.employerInfo.address.street}<br />
+                      {investigation.employerInfo.address.city}, {investigation.employerInfo.address.region}<br />
+                      {investigation.employerInfo.address.country}
+                    </p>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="font-medium mb-2">Primary Contact</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Name:</span> {investigation.employerInfo.primaryContact.name}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Position:</span> {investigation.employerInfo.primaryContact.position}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Email:</span>{' '}
+                        <a href={`mailto:${investigation.employerInfo.primaryContact.email}`} className="text-blue-600 hover:underline">
+                          {investigation.employerInfo.primaryContact.email}
+                        </a>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Phone:</span>{' '}
+                        <a href={`tel:${investigation.employerInfo.primaryContact.phone}`} className="text-blue-600 hover:underline">
+                          {investigation.employerInfo.primaryContact.phone}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Compliance Status: </span>
+                    <Badge className={
+                      investigation.employerInfo.complianceStatus === 'COMPLIANT' ? 'bg-green-100 text-green-800' :
+                      investigation.employerInfo.complianceStatus === 'NON_COMPLIANT' ? 'bg-red-100 text-red-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }>
+                      {investigation.employerInfo.complianceStatus.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Investigation Overview */}
           <Card>
