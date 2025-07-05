@@ -32,7 +32,7 @@ export interface IReport extends Document {
   siteLocation?: string;
   incidentType: string;
   regulationBreached?: string;
-  severityLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   description: string;
   reporterId?: mongoose.Types.ObjectId;
   reporterEmail?: string;
@@ -41,6 +41,13 @@ export interface IReport extends Document {
   status: 'RECEIVED' | 'UNDER_REVIEW' | 'VERIFIED' | 'RESOLVED' | 'CLOSED';
   assignedOfficerId?: mongoose.Types.ObjectId;
   attachments: IAttachment[];
+  metadata?: {
+    source?: string;
+    articleUrl?: string;
+    validationConfidence?: number;
+    validationReason?: string;
+    imagePaths?: string[];
+  };
   createdAt: Date;
   updatedAt: Date;
   resolvedAt?: Date;
@@ -96,7 +103,7 @@ const reportSchema = new Schema<IReport>(
     severityLevel: {
       type: String,
       enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
-      required: true,
+      required: false,
     },
     description: {
       type: String,
@@ -122,6 +129,13 @@ const reportSchema = new Schema<IReport>(
       ref: 'User',
     },
     attachments: [attachmentSchema],
+    metadata: {
+      source: String,
+      articleUrl: String,
+      validationConfidence: Number,
+      validationReason: String,
+      imagePaths: [String],
+    },
     resolvedAt: Date,
   },
   {

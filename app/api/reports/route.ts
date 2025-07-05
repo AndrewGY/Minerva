@@ -13,7 +13,7 @@ const schema = z.object({
   industry: z.string().optional(),
   incidentType: z.string().optional(),
   regulationBreached: z.string().optional(),
-  severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   description: z.string().min(20),
   reporterEmail: z.string().email().optional().or(z.literal("")),
   reporterPhone: z.string().optional(),

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -18,7 +19,11 @@ import {
   Activity,
   Shield,
   TrendingDown,
-  FileText
+  FileText,
+  Building,
+  Globe,
+  PieChart as PieChartIcon,
+  LineChart as LineChartIcon
 } from "lucide-react";
 import {
   BarChart,
@@ -140,23 +145,35 @@ interface AnalyticsData {
 }
 
 const COLORS = {
-  primary: '#1e40af',
-  primaryLight: '#3b82f6',
-  critical: '#dc2626',
-  high: '#ea580c',
-  medium: '#d97706',
-  low: '#059669',
-  resolved: '#065f46',
-  pending: '#4338ca',
-  neutral: '#6b7280',
+  primary: '#0f172a',
+  primaryLight: '#1e293b',
+  secondary: '#475569',
+  accent: '#0ea5e9',
+  accentLight: '#38bdf8',
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#eab308',
+  low: '#22c55e',
+  resolved: '#16a34a',
+  pending: '#3b82f6',
+  neutral: '#64748b',
   background: '#f8fafc',
   cardBackground: '#ffffff',
+  surface: '#f1f5f9',
+  border: '#e2e8f0',
+  text: {
+    primary: '#0f172a',
+    secondary: '#475569',
+    muted: '#64748b',
+    inverse: '#ffffff'
+  },
   gradient: {
-    blue: 'from-blue-600 to-blue-700',
-    red: 'from-red-500 to-red-600',
-    green: 'from-green-500 to-green-600',
-    orange: 'from-orange-500 to-orange-600',
-    purple: 'from-purple-500 to-purple-600'
+    primary: 'from-slate-900 to-slate-800',
+    secondary: 'from-blue-600 to-blue-700',
+    accent: 'from-sky-500 to-sky-600',
+    success: 'from-emerald-500 to-emerald-600',
+    warning: 'from-amber-500 to-amber-600',
+    danger: 'from-red-500 to-red-600'
   }
 };
 
@@ -165,12 +182,63 @@ const monthNames = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ];
 
+// Metric Card Component
+function MetricCard({ 
+  title, 
+  value, 
+  subtitle, 
+  icon: Icon, 
+  trend, 
+  color = "blue" 
+}: {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: any;
+  trend?: { value: number; positive: boolean };
+  color?: "blue" | "purple" | "red" | "green" | "orange";
+}) {
+  const gradients = {
+    blue: "from-slate-800 to-slate-900",
+    purple: "from-blue-600 to-blue-700",
+    red: "from-red-500 to-red-600",
+    green: "from-emerald-500 to-emerald-600",
+    orange: "from-amber-500 to-amber-600",
+  };
+
+  return (
+    <Card className="bg-white shadow-sm border border-slate-200 hover:shadow-lg hover:border-slate-300 transition-all duration-300 group">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{title}</p>
+            <p className="text-3xl font-bold text-slate-900 mb-1">{value}</p>
+            {subtitle && <p className="text-sm text-slate-600">{subtitle}</p>}
+            {trend && (
+              <div className="flex items-center gap-2 mt-3">
+                <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium ${
+                  trend.positive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  {trend.positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {Math.abs(trend.value).toFixed(1)}%
+                </div>
+              </div>
+            )}
+          </div>
+          <div className={`w-16 h-16 bg-gradient-to-br ${gradients[color]} rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform duration-300`}>
+            <Icon className="w-8 h-8 text-white" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AnalyticsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTimeRange, setSelectedTimeRange] = useState('month');
 
   useEffect(() => {
     if (status === "loading") return;
@@ -199,10 +267,11 @@ export default function AnalyticsPage() {
 
   if (loading || !data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading analytics...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-b-slate-800 mx-auto mb-6"></div>
+          <p className="text-slate-600 text-lg font-medium">Loading analytics...</p>
+          <p className="text-slate-500 text-sm mt-2">Gathering comprehensive insights</p>
         </div>
       </div>
     );
@@ -226,7 +295,11 @@ export default function AnalyticsPage() {
   const severityData = data.distributions.severity.map(item => ({
     name: item._id,
     value: item.count,
-    fill: COLORS[item._id.toLowerCase() as keyof typeof COLORS] || COLORS.neutral
+    fill: item._id.toLowerCase() === 'critical' ? COLORS.critical :
+          item._id.toLowerCase() === 'high' ? COLORS.high :
+          item._id.toLowerCase() === 'medium' ? COLORS.medium :
+          item._id.toLowerCase() === 'low' ? COLORS.low :
+          COLORS.neutral
   }));
 
   const statusData = data.distributions.status.map(item => ({
@@ -248,636 +321,572 @@ export default function AnalyticsPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="container mx-auto px-6 py-8">
-        <div className="mb-10">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
-              <BarChart3 className="w-6 h-6 text-white" />
+        <div className="mb-12">
+          <div className="flex items-center gap-5 mb-6">
+            <div className="w-14 h-14 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
+              <BarChart3 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Analytics Dashboard</h1>
-              <p className="text-lg text-gray-600 mt-1">Comprehensive insights into HSSE incidents and performance metrics</p>
+              <h1 className="text-5xl font-bold text-slate-900 tracking-tight">Analytics Dashboard</h1>
+              <p className="text-xl text-slate-600 mt-2">Comprehensive insights into HSSE incidents and performance metrics</p>
             </div>
           </div>
-          <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
+          <div className="w-32 h-1 bg-gradient-to-r from-slate-800 to-slate-600 rounded-full"></div>
         </div>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Total Incidents</p>
-                  <p className="text-3xl font-bold text-gray-900 mb-1">{data.summary.totalReports.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">All time records</p>
-                </div>
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <FileText className="w-7 h-7 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="overview" className="space-y-10">
+          <div className="flex justify-center mb-2">
+            <TabsList className="inline-flex h-auto bg-white shadow-lg border border-slate-200 rounded-2xl p-2 backdrop-blur-sm overflow-x-auto">
+              <TabsTrigger value="overview" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <PieChartIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Overview</span>
+              </TabsTrigger>
+              <TabsTrigger value="incidents" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <Activity className="w-4 h-4" />
+                <span className="hidden sm:inline">Incident Analysis</span>
+              </TabsTrigger>
+              <TabsTrigger value="geographic" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <Globe className="w-4 h-4" />
+                <span className="hidden sm:inline">Geographic</span>
+              </TabsTrigger>
+              <TabsTrigger value="employers" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <Building className="w-4 h-4" />
+                <span className="hidden sm:inline">Employer Risk</span>
+              </TabsTrigger>
+              <TabsTrigger value="performance" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <LineChartIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Performance</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">This Month</p>
-                  <p className="text-3xl font-bold text-gray-900 mb-1">{data.summary.monthReports.toLocaleString()}</p>
-                  <div className="flex items-center gap-2">
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      data.summary.monthOverMonthChange >= 0 
-                        ? 'bg-red-100 text-red-700' 
-                        : 'bg-green-100 text-green-700'
-                    }`}>
-                      {data.summary.monthOverMonthChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                      {Math.abs(data.summary.monthOverMonthChange).toFixed(1)}%
-                    </div>
-                    <span className="text-sm text-gray-500">vs last month</span>
-                  </div>
-                </div>
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <Calendar className="w-7 h-7 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Critical Incidents</p>
-                  <p className="text-3xl font-bold text-red-600 mb-1">{data.summary.criticalIncidents.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">Immediate attention required</p>
-                </div>
-                <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <AlertTriangle className="w-7 h-7 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Resolution Rate</p>
-                  <p className="text-3xl font-bold text-green-600 mb-1">{data.summary.resolutionRate.toFixed(1)}%</p>
-                  <p className="text-sm text-gray-500">Avg: {data.summary.avgResponseTimeHours.toFixed(1)}h response</p>
-                </div>
-                <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <CheckCircle className="w-7 h-7 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Geographic Heatmap */}
-        <Card className="mb-10 bg-white shadow-xl border-0 overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
-            <CardTitle className="flex items-center gap-3 text-xl font-bold">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <MapPin className="w-5 h-5" />
-              </div>
-              Geographic Incident Distribution - Guyana
-            </CardTitle>
-            <p className="text-blue-100 mt-2">Interactive heatmap showing incident density across regions</p>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <GuyanaHeatmap data={data.geographic.heatmapData} />
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-8 animate-in fade-in-0 duration-200">
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <MetricCard
+                title="Total Incidents"
+                value={data.summary.totalReports.toLocaleString()}
+                subtitle="All time records"
+                icon={FileText}
+                color="blue"
+              />
+              <MetricCard
+                title="This Month"
+                value={data.summary.monthReports.toLocaleString()}
+                subtitle="vs last month"
+                icon={Calendar}
+                color="purple"
+                trend={{
+                  value: data.summary.monthOverMonthChange,
+                  positive: data.summary.monthOverMonthChange < 0
+                }}
+              />
+              <MetricCard
+                title="Critical Incidents"
+                value={data.summary.criticalIncidents.toLocaleString()}
+                subtitle="Immediate attention required"
+                icon={AlertTriangle}
+                color="red"
+              />
+              <MetricCard
+                title="Resolution Rate"
+                value={`${data.summary.resolutionRate.toFixed(1)}%`}
+                subtitle={`Avg: ${data.summary.avgResponseTimeHours.toFixed(1)}h response`}
+                icon={CheckCircle}
+                color="green"
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-          {/* Monthly Trend */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-white" />
-                </div>
-                Monthly Incident Trend
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Severity breakdown over time</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={320}>
-                <AreaChart data={monthlyTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="month" 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Legend />
-                  <Area type="monotone" dataKey="critical" stackId="1" stroke={COLORS.critical} fill={COLORS.critical} fillOpacity={0.8} />
-                  <Area type="monotone" dataKey="high" stackId="1" stroke={COLORS.high} fill={COLORS.high} fillOpacity={0.8} />
-                  <Area type="monotone" dataKey="medium" stackId="1" stroke={COLORS.medium} fill={COLORS.medium} fillOpacity={0.8} />
-                  <Area type="monotone" dataKey="low" stackId="1" stroke={COLORS.low} fill={COLORS.low} fillOpacity={0.8} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Severity Distribution */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-white" />
-                </div>
-                Severity Distribution
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Incident classification breakdown</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={severityData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    fill="#8884d8"
-                    dataKey="value"
-                    stroke="#ffffff"
-                    strokeWidth={2}
-                  >
-                    {severityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-          {/* Hourly Distribution */}
-          <Card className="lg:col-span-2 bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
-                  <Clock className="w-4 h-4 text-white" />
-                </div>
-                Incidents by Hour of Day
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Peak incident reporting times</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="hour" 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="incidents" 
-                    fill={COLORS.primary} 
-                    radius={[4, 4, 0, 0]}
-                    stroke={COLORS.primaryLight}
-                    strokeWidth={1}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Reporter Types */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-                  <Users className="w-4 h-4 text-white" />
-                </div>
-                Reporter Types
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Reporting source breakdown</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-6">
-                {data.distributions.reporterTypes.map((type) => {
-                  const percentage = (type.count / data.summary.totalReports) * 100;
-                  return (
-                    <div key={type.type} className="group">
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"></div>
-                          <span className="font-semibold text-gray-700">{type.type}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-lg font-bold text-gray-900">{type.count}</span>
-                          <span className="text-sm text-gray-500 ml-2">({percentage.toFixed(1)}%)</span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 group-hover:from-blue-600 group-hover:to-blue-700" 
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
+            {/* Summary Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Monthly Trend */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-white" />
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                    Monthly Incident Trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <AreaChart data={monthlyTrendData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
+                      <YAxis stroke="#64748b" fontSize={12} />
+                      <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                      <Legend />
+                      <Area type="monotone" dataKey="critical" stackId="1" stroke={COLORS.critical} fill={COLORS.critical} fillOpacity={0.9} />
+                      <Area type="monotone" dataKey="high" stackId="1" stroke={COLORS.high} fill={COLORS.high} fillOpacity={0.9} />
+                      <Area type="monotone" dataKey="medium" stackId="1" stroke={COLORS.medium} fill={COLORS.medium} fillOpacity={0.9} />
+                      <Area type="monotone" dataKey="low" stackId="1" stroke={COLORS.low} fill={COLORS.low} fillOpacity={0.9} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-        {/* Top Locations & Incident Types */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-          {/* Top Locations */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center">
-                  <MapPin className="w-4 h-4 text-white" />
-                </div>
-                Top Affected Locations
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Highest incident concentration areas</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-4">
-                {data.geographic.topLocations.slice(0, 8).map((loc, index) => (
-                  <div key={index} className="group p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            {index + 1}
+              {/* Severity Distribution */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+                      <PieChartIcon className="w-5 h-5 text-white" />
+                    </div>
+                    Severity Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <PieChart>
+                      <Pie
+                        data={severityData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry) => `${entry.name}: ${entry.value}`}
+                        outerRadius={90}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {severityData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Incident Analysis Tab */}
+          <TabsContent value="incidents" className="space-y-8 animate-in fade-in-0 duration-200">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Hourly Distribution */}
+              <Card className="lg:col-span-2 bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-white" />
+                    </div>
+                    Incidents by Hour of Day
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={hourlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="hour" stroke="#64748b" fontSize={12} />
+                      <YAxis stroke="#64748b" fontSize={12} />
+                      <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                      <Bar dataKey="incidents" fill={COLORS.primary} radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Reporter Types */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                      <Users className="w-5 h-5 text-white" />
+                    </div>
+                    Reporter Types
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-6">
+                    {data.distributions.reporterTypes.map((type) => {
+                      const percentage = (type.count / data.summary.totalReports) * 100;
+                      return (
+                        <div key={type.type}>
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="font-semibold text-slate-700">{type.type}</span>
+                            <span className="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-full">{percentage.toFixed(1)}%</span>
                           </div>
-                          <p className="font-semibold text-gray-900 truncate">{loc.location}</p>
-                        </div>
-                        {loc.criticalCount > 0 && (
-                          <div className="flex items-center gap-2 ml-9">
-                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                            <span className="text-sm font-medium text-red-600">{loc.criticalCount} critical incidents</span>
+                          <div className="w-full bg-slate-200 rounded-full h-3">
+                            <div 
+                              className="bg-gradient-to-r from-slate-800 to-slate-700 h-3 rounded-full transition-all duration-300" 
+                              style={{ width: `${percentage}%` }}
+                            />
                           </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 ml-4">
-                        <div className="text-right">
-                          <span className="text-lg font-bold text-gray-900">{loc.count}</span>
-                          <span className="text-sm text-gray-500 block">incidents</span>
                         </div>
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500" 
-                            style={{ width: `${(loc.count / data.geographic.topLocations[0].count) * 100}%` }}
-                          />
-                        </div>
-                      </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Incident Types */}
+            <Card className="bg-white shadow-sm border border-slate-200">
+              <CardHeader className="border-b border-slate-100 pb-4">
+                <CardTitle className="flex items-center gap-3 text-slate-900">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-white" />
+                  </div>
+                  Incident Types Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={incidentTypeData} layout="horizontal">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" stroke="#64748b" fontSize={12} />
+                    <YAxis dataKey="type" type="category" width={120} stroke="#64748b" fontSize={12} />
+                    <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                    <Bar dataKey="count" fill={COLORS.primary} radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Daily Trend */}
+            <Card className="bg-white shadow-sm border border-slate-200">
+              <CardHeader className="border-b border-slate-100 pb-4">
+                <CardTitle className="flex items-center gap-3 text-slate-900">
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  Daily Trend (Last 30 Days)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={dailyTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
+                    <YAxis stroke="#64748b" fontSize={12} />
+                    <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="incidents" 
+                      stroke={COLORS.primary} 
+                      strokeWidth={3}
+                      dot={{ fill: COLORS.primary, strokeWidth: 2, r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Geographic Tab */}
+          <TabsContent value="geographic" className="space-y-8 animate-in fade-in-0 duration-200">
+            {/* Geographic Heatmap */}
+            <Card className="bg-white shadow-sm border border-slate-200 overflow-hidden">
+              <CardHeader className="border-b border-slate-100 pb-6">
+                <CardTitle className="flex items-center gap-4 text-slate-900">
+                  <div className="w-12 h-12 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center shadow-lg">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-slate-900">Geographic Incident Distribution</h3>
+                    <p className="text-slate-600 mt-1 text-sm">Interactive heatmap showing incident density across Guyana</p>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                      <span className="text-slate-600">Critical</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                      <span className="text-slate-600">High</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
+                      <span className="text-slate-600">Medium</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                      <span className="text-slate-600">Low</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Incident Types */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-white" />
                 </div>
-                Incident Types
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Most common incident categories</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={incidentTypeData} layout="horizontal">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    type="number" 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis 
-                    dataKey="type" 
-                    type="category" 
-                    width={120}
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill={COLORS.primary} 
-                    radius={[0, 4, 4, 0]}
-                    stroke={COLORS.primaryLight}
-                    strokeWidth={1}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Employer Performance Analytics */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-          {/* Worst Performing Employers */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-white" />
+                <div className="p-6">
+                  <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl p-6 border border-slate-200">
+                    <GuyanaHeatmap data={data.geographic.heatmapData} />
+                  </div>
                 </div>
-                High-Risk Employers
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Companies with highest incident rates and risk scores</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {data.employers?.worstPerformers?.slice(0, 10).map((employer, index) => (
-                  <div key={employer._id} className="group p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
-                            employer.riskScore > 50 ? 'bg-red-500' : 
-                            employer.riskScore > 30 ? 'bg-orange-500' : 
-                            employer.riskScore > 10 ? 'bg-yellow-500' : 'bg-green-500'
+              </CardContent>
+            </Card>
+
+            {/* Top Locations */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center">
+                      <MapPin className="w-5 h-5 text-white" />
+                    </div>
+                    Top Affected Locations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {data.geographic.topLocations.slice(0, 8).map((loc, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold ${
+                            index === 0 ? 'bg-gradient-to-br from-red-500 to-red-600' :
+                            index === 1 ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
+                            index === 2 ? 'bg-gradient-to-br from-yellow-500 to-yellow-600' :
+                            'bg-gradient-to-br from-slate-500 to-slate-600'
                           }`}>
                             {index + 1}
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-900 truncate">{employer._id}</p>
-                            <p className="text-sm text-gray-600">{employer.industry} • {employer.companySize}</p>
+                            <p className="font-semibold text-slate-900">{loc.location}</p>
+                            {loc.criticalCount > 0 && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                <p className="text-sm text-red-600 font-medium">{loc.criticalCount} critical incidents</p>
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div className="text-center">
-                            <div className="font-bold text-gray-900">{employer.totalIncidents}</div>
-                            <div className="text-gray-500">Incidents</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-bold text-red-600">{employer.criticalIncidents}</div>
-                            <div className="text-gray-500">Critical</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-bold text-orange-600">{employer.totalCasualties}</div>
-                            <div className="text-gray-500">Casualties</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-3">
-                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            employer.complianceStatus === 'COMPLIANT' ? 'bg-green-100 text-green-700' :
-                            employer.complianceStatus === 'NON_COMPLIANT' ? 'bg-red-100 text-red-700' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {employer.complianceStatus.replace('_', ' ')}
-                          </div>
-                          {employer.safetyRating && (
-                            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              employer.safetyRating === 'EXCELLENT' ? 'bg-green-100 text-green-700' :
-                              employer.safetyRating === 'GOOD' ? 'bg-blue-100 text-blue-700' :
-                              employer.safetyRating === 'FAIR' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
-                              {employer.safetyRating}
-                            </div>
-                          )}
+                        <div className="text-right">
+                          <span className="text-2xl font-bold text-slate-900">{loc.count}</span>
+                          <span className="text-sm text-slate-500 block">incidents</span>
                         </div>
                       </div>
-                      <div className="text-right ml-4">
-                        <div className="text-lg font-bold text-gray-900">{employer.riskScore.toFixed(0)}</div>
-                        <div className="text-sm text-gray-500">Risk Score</div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                )) || (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No employer data available</p>
-                    <p className="text-sm">Investigation reports required for employer analytics</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          {/* Industry Risk Analysis */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <BarChart3 className="w-4 h-4 text-white" />
-                </div>
-                Industry Risk Analysis
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Risk metrics by industry sector</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {data.employers?.industryRisk?.map((industry, index) => (
-                  <div key={industry._id} className="group p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                          {index + 1}
-                        </div>
+              {/* Geographic Statistics */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+                      <Globe className="w-5 h-5 text-white" />
+                    </div>
+                    Geographic Statistics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-6">
+                    <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                      <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold text-gray-900">{industry._id}</p>
-                          <p className="text-sm text-gray-600">{industry.uniqueCompanies} companies</p>
+                          <p className="text-sm font-medium text-blue-700">Total Locations</p>
+                          <p className="text-2xl font-bold text-blue-900">{data.geographic.topLocations.length}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                          <MapPin className="w-6 h-6 text-white" />
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-gray-900">{industry.incidentRate.toFixed(1)}</div>
-                        <div className="text-sm text-gray-500">Incidents/Company</div>
-                      </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div className="text-center">
-                        <div className="font-bold text-gray-900">{industry.totalIncidents}</div>
-                        <div className="text-gray-500">Total Incidents</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold text-red-600">{industry.criticalIncidents}</div>
-                        <div className="text-gray-500">Critical</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold text-orange-600">{industry.totalCasualties}</div>
-                        <div className="text-gray-500">Casualties</div>
-                      </div>
-                    </div>
-                    {industry.avgFinancialImpact > 0 && (
-                      <div className="mt-3 text-center">
-                        <div className="text-sm text-gray-600">
-                          Avg Financial Impact: <span className="font-semibold">${industry.avgFinancialImpact.toLocaleString()}</span>
+                    
+                    <div className="p-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-red-700">Critical Hotspots</p>
+                          <p className="text-2xl font-bold text-red-900">{data.geographic.topLocations.filter(loc => loc.criticalCount > 0).length}</p>
                         </div>
+                        <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center">
+                          <AlertTriangle className="w-6 h-6 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-emerald-700">Avg Incidents/Location</p>
+                          <p className="text-2xl font-bold text-emerald-900">{(data.geographic.topLocations.reduce((sum, loc) => sum + loc.count, 0) / data.geographic.topLocations.length).toFixed(1)}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center">
+                          <BarChart3 className="w-6 h-6 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Employer Risk Tab */}
+          <TabsContent value="employers" className="space-y-8 animate-in fade-in-0 duration-200">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* High-Risk Employers */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center">
+                      <AlertTriangle className="w-5 h-5 text-white" />
+                    </div>
+                    High-Risk Employers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {data.employers?.worstPerformers?.slice(0, 10).map((employer, index) => (
+                      <div key={employer._id} className="p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold ${
+                                employer.riskScore > 50 ? 'bg-gradient-to-br from-red-500 to-red-600' : 
+                                employer.riskScore > 30 ? 'bg-gradient-to-br from-orange-500 to-orange-600' : 
+                                employer.riskScore > 10 ? 'bg-gradient-to-br from-yellow-500 to-yellow-600' : 'bg-gradient-to-br from-green-500 to-green-600'
+                              }`}>
+                                {index + 1}
+                              </div>
+                              <p className="font-semibold text-slate-900">{employer._id}</p>
+                            </div>
+                            <p className="text-sm text-slate-600 mb-3 bg-slate-100 px-3 py-1 rounded-full inline-block">{employer.industry} • {employer.companySize}</p>
+                            <div className="flex gap-4 text-sm">
+                              <span className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-600 rounded-full"></div><strong>{employer.totalIncidents}</strong> incidents</span>
+                              <span className="flex items-center gap-1 text-red-600"><div className="w-2 h-2 bg-red-500 rounded-full"></div><strong>{employer.criticalIncidents}</strong> critical</span>
+                              <span className="flex items-center gap-1 text-orange-600"><div className="w-2 h-2 bg-orange-500 rounded-full"></div><strong>{employer.totalCasualties}</strong> casualties</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-slate-900">{employer.riskScore.toFixed(0)}</div>
+                            <div className="text-sm text-slate-500 font-medium">Risk Score</div>
+                          </div>
+                        </div>
+                      </div>
+                    )) || (
+                      <div className="text-center py-8 text-slate-500">
+                        <p>No employer data available</p>
                       </div>
                     )}
                   </div>
-                )) || (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No industry data available</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </CardContent>
+              </Card>
 
-        {/* Performance Metrics */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Resolution Rates by Severity */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-4 h-4 text-white" />
-                </div>
-                Resolution Rates by Severity
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Performance metrics by incident severity</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-6">
-                {data.performance.resolutionRates.map((item) => (
-                  <div key={item.severity} className="group">
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="flex items-center gap-3">
+              {/* Industry Risk Analysis */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader className="border-b border-slate-100 pb-4">
+                  <CardTitle className="flex items-center gap-3 text-slate-900">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+                      <BarChart3 className="w-5 h-5 text-white" />
+                    </div>
+                    Industry Risk Analysis
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {data.employers?.industryRisk?.map((industry, index) => (
+                      <div key={industry._id} className="p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">
+                              {index + 1}
+                            </div>
+                            <p className="font-semibold text-slate-900">{industry._id}</p>
+                          </div>
+                          <span className="text-sm text-slate-600 bg-slate-100 px-3 py-1 rounded-full font-medium">{industry.uniqueCompanies} companies</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-600 rounded-full"></div>{industry.totalIncidents} incidents</span>
+                          <span className="flex items-center gap-1 text-red-600"><div className="w-2 h-2 bg-red-500 rounded-full"></div>{industry.criticalIncidents} critical</span>
+                          <span className="flex items-center gap-1 font-semibold text-purple-600"><div className="w-2 h-2 bg-purple-500 rounded-full"></div>{industry.incidentRate.toFixed(1)}/company</span>
+                        </div>
+                      </div>
+                    )) || (
+                      <div className="text-center py-8 text-slate-500">
+                        <p>No industry data available</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Performance Tab */}
+          <TabsContent value="performance" className="space-y-8 animate-in fade-in-0 duration-200">
+            {/* Resolution Rates */}
+            <Card className="bg-white shadow-sm border border-slate-200">
+              <CardHeader className="border-b border-slate-100 pb-4">
+                <CardTitle className="flex items-center gap-3 text-slate-900">
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
+                  Resolution Rates by Severity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-6">
+                  {data.performance.resolutionRates.map((item) => (
+                    <div key={item.severity}>
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-5 h-5 rounded-xl"
+                            style={{ backgroundColor: COLORS[item.severity.toLowerCase() as keyof typeof COLORS] || COLORS.neutral }}
+                          />
+                          <span className="font-semibold text-slate-700">{item.severity}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xl font-bold text-slate-900">{item.rate.toFixed(1)}%</span>
+                          <span className="text-sm text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-full">{item.resolved}/{item.total}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-4">
                         <div 
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: COLORS[item.severity.toLowerCase() as keyof typeof COLORS] || COLORS.neutral }}
-                        ></div>
-                        <span className="font-semibold text-gray-700">{item.severity}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-bold text-gray-900">{item.rate.toFixed(1)}%</span>
-                        <span className="text-sm text-gray-500 block">{item.resolved}/{item.total} resolved</span>
+                          className="h-4 rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${item.rate}%`,
+                            backgroundColor: COLORS[item.severity.toLowerCase() as keyof typeof COLORS] || COLORS.neutral
+                          }}
+                        />
                       </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                      <div 
-                        className="h-3 rounded-full transition-all duration-500 group-hover:opacity-80"
-                        style={{ 
-                          width: `${item.rate}%`,
-                          backgroundColor: COLORS[item.severity.toLowerCase() as keyof typeof COLORS] || COLORS.neutral
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Daily Trend */}
-          <Card className="bg-white shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-900">
-                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-white" />
+                  ))}
                 </div>
-                Daily Trend (Last 30 Days)
-              </CardTitle>
-              <p className="text-gray-600 mt-2">Recent incident reporting patterns</p>
-            </CardHeader>
-            <CardContent className="p-6">
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={dailyTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis 
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="incidents" 
-                    stroke={COLORS.primary} 
-                    strokeWidth={3}
-                    dot={{ fill: COLORS.primary, strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: COLORS.primary }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+
+            {/* Status Distribution */}
+            <Card className="bg-white shadow-sm border border-slate-200">
+              <CardHeader className="border-b border-slate-100 pb-4">
+                <CardTitle className="flex items-center gap-3 text-slate-900">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  Report Status Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <ResponsiveContainer width="100%" height={320}>
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={(entry) => `${entry.name}: ${entry.value}`}
+                      outerRadius={90}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS.primary} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

@@ -30,7 +30,7 @@ const schema = z.object({
   industry: z.string().optional(),
   incidentType: z.string().optional(),
   regulationBreached: z.string().optional(),
-  severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  severityLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   description: z.string().min(20, "Description too short"),
   reporterEmail: z.string().email().optional().or(z.literal("")),
   reporterPhone: z.string().optional(),
@@ -85,7 +85,6 @@ export default function SubmitReport() {
       incidentDate: new Date().toISOString().split('T')[0],
       incidentTime: new Date().toTimeString().slice(0, 5),
       isAnonymous: true,
-      severityLevel: "MEDIUM",
       location: { address: "", lat: 0, lng: 0, details: "" },
       skipAddressEntry: false,
     },
@@ -404,7 +403,7 @@ export default function SubmitReport() {
                 <AddressAutocomplete
                   onLocationSelect={handleLocationSelect}
                   value={form.watch("location.address")}
-                  label="Address"
+                  label="Location of Incident"
                   placeholder="Start typing a location in Guyana..."
                   required={!skipAddressEntry}
                   disabled={skipAddressEntry}
