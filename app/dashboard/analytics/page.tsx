@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -23,7 +25,23 @@ import {
   Building,
   Globe,
   PieChart as PieChartIcon,
-  LineChart as LineChartIcon
+  LineChart as LineChartIcon,
+  Eye,
+  Briefcase,
+  Settings,
+
+  Award,
+  BookOpen,
+  Filter,
+  Download,
+  RefreshCw,
+  DollarSign,
+  Scale,
+  Gavel,
+  Heart,
+  Building2,
+  Factory,
+  Search
 } from "lucide-react";
 import {
   BarChart,
@@ -40,7 +58,6 @@ import {
   Legend,
   ResponsiveContainer,
   RadarChart,
-  RadarData,
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
@@ -56,90 +73,104 @@ const GuyanaHeatmap = dynamic(() => import("@/components/GuyanaHeatmap"), {
 });
 
 interface AnalyticsData {
-  summary: {
-    totalReports: number;
-    todayReports: number;
-    weekReports: number;
-    monthReports: number;
-    yearReports: number;
-    criticalIncidents: number;
-    resolvedReports: number;
-    resolutionRate: number;
-    avgResponseTimeHours: number;
-    monthOverMonthChange: number;
-  };
-  distributions: {
-    status: Array<{ _id: string; count: number }>;
-    severity: Array<{ _id: string; count: number }>;
-    incidentTypes: Array<{ _id: string; count: number }>;
-    hourly: Array<{ _id: number; count: number }>;
-    reporterTypes: Array<{ type: string; count: number }>;
-  };
-  trends: {
-    monthly: Array<{
-      _id: { year: number; month: number };
-      count: number;
-      critical: number;
-      high: number;
-      medium: number;
-      low: number;
-    }>;
-    daily: Array<{
-      _id: { year: number; month: number; day: number };
-      count: number;
-    }>;
-  };
-  geographic: {
-    heatmapData: Array<{
-      location: { lat: number; lng: number };
-      severityLevel: string;
-      incidentType: string;
-    }>;
-    topLocations: Array<{
+  public: {
+    publishedReports: Array<{
+      _id: string;
+      title: string;
+      publishedAt: Date;
+      publicId: string;
+      summary: string;
       location: string;
-      count: number;
-      criticalCount: number;
-    }>;
-  };
-  performance: {
-    resolutionRates: Array<{
-      severity: string;
-      total: number;
-      resolved: number;
-      rate: number;
-    }>;
-    industryBreakdown: Array<{
-      _id: string;
-      count: number;
-      critical: number;
-    }>;
-  };
-  employers: {
-    worstPerformers: Array<{
-      _id: string;
-      totalIncidents: number;
-      criticalIncidents: number;
       industry: string;
-      companySize: string;
-      complianceStatus: string;
-      totalCasualties: number;
-      riskScore: number;
-      avgFinancialImpact: number;
     }>;
-    industryRisk: Array<{
-      _id: string;
-      totalIncidents: number;
-      uniqueCompanies: number;
-      criticalIncidents: number;
-      totalCasualties: number;
-      incidentRate: number;
-      avgFinancialImpact: number;
-    }>;
-    complianceBreakdown: Array<{
-      _id: string;
+    topReporters: Array<{
+      reporterType: string;
       count: number;
-      uniqueCompanies: number;
+      percentage: number;
     }>;
+    totalIncidents: {
+      thisYear: number;
+      thisMonth: number;
+      totalResolved: number;
+      percentageResolved: number;
+      daysSinceLastMajor: number;
+    };
+    incidentsBySeverity: Array<{
+      severity: string;
+      count: number;
+      percentage: number;
+    }>;
+    incidentsByType: Array<{
+      type: string;
+      count: number;
+    }>;
+    monthlyTrends: Array<{
+      month: string;
+      incidents: number;
+      resolved: number;
+    }>;
+    incidentsByRegion: Array<{
+      region: string;
+      count: number;
+      severity: string;
+    }>;
+    investigationOutcomes: Array<{
+      outcome: string;
+      count: number;
+      percentage: number;
+    }>;
+    geographic?: {
+      heatmapData: Array<{
+        location: {
+          lat: number;
+          lng: number;
+        };
+        severityLevel: string;
+        incidentType: string;
+      }>;
+    };
+    outcomes?: {
+      investigationStats: {
+        completed: number;
+        ongoing: number;
+      };
+      resolutionRate: number;
+      avgInvestigationTime: number;
+    };
+  };
+
+  industry: {
+    topCauses: Array<{
+      cause: string;
+      count: number;
+    }>;
+    regionalDensity: Array<{
+      region: string;
+      incidents: number;
+      density: string;
+    }>;
+  };
+
+  policy: {
+    nationalMetrics: {
+      accidentRate: number;
+      yoyChange: number;
+    };
+    investigationPipeline: Array<{
+      status: string;
+      count: number;
+      color: string;
+      description: string;
+    }>;
+    publicEngagement: {
+      publicReports: number;
+      citizenReports: number;
+      channels: Array<{
+        channel: string;
+        reports: number;
+        percentage: number;
+      }>;
+    };
   };
 }
 
@@ -242,17 +273,13 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (status === "loading") return;
     
-    if (!session) {
-      router.push("/login");
-      return;
-    }
-
+    // Allow public access to analytics (no login required)
     fetchAnalytics();
-  }, [session, status, router]);
+  }, [status]);
 
   const fetchAnalytics = async () => {
     try {
-      const response = await fetch("/api/analytics");
+      const response = await fetch("/api/analytics/data");
       if (response.ok) {
         const analyticsData = await response.json();
         setData(analyticsData);
@@ -276,49 +303,6 @@ export default function AnalyticsPage() {
     );
   }
 
-  // Format data for charts
-  const monthlyTrendData = data.trends.monthly.map(item => ({
-    month: `${monthNames[item._id.month - 1]} ${item._id.year}`,
-    total: item.count,
-    critical: item.critical,
-    high: item.high,
-    medium: item.medium,
-    low: item.low
-  }));
-
-  const dailyTrendData = data.trends.daily.map(item => ({
-    date: `${item._id.day}/${item._id.month}`,
-    incidents: item.count
-  }));
-
-  const severityData = data.distributions.severity.map(item => ({
-    name: item._id,
-    value: item.count,
-    fill: item._id.toLowerCase() === 'critical' ? COLORS.critical :
-          item._id.toLowerCase() === 'high' ? COLORS.high :
-          item._id.toLowerCase() === 'medium' ? COLORS.medium :
-          item._id.toLowerCase() === 'low' ? COLORS.low :
-          COLORS.neutral
-  }));
-
-  const statusData = data.distributions.status.map(item => ({
-    name: item._id.replace('_', ' '),
-    value: item.count
-  }));
-
-  const hourlyData = Array.from({ length: 24 }, (_, hour) => {
-    const found = data.distributions.hourly.find(h => h._id === hour);
-    return {
-      hour: `${hour}:00`,
-      incidents: found?.count || 0
-    };
-  });
-
-  const incidentTypeData = data.distributions.incidentTypes.map(item => ({
-    type: item._id.replace('-', ' ').replace('_', ' '),
-    count: item.count
-  }));
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="container mx-auto px-6 py-8">
@@ -328,190 +312,135 @@ export default function AnalyticsPage() {
               <BarChart3 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-5xl font-bold text-slate-900 tracking-tight">Analytics Dashboard</h1>
-              <p className="text-xl text-slate-600 mt-2">Comprehensive insights into HSSE incidents and performance metrics</p>
+              <h1 className="text-5xl font-bold text-slate-900 tracking-tight">Analytics</h1>
+              <p className="text-xl text-slate-600 mt-2">Comprehensive insights for different stakeholder perspectives</p>
             </div>
           </div>
           <div className="w-32 h-1 bg-gradient-to-r from-slate-800 to-slate-600 rounded-full"></div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-10">
+        <Tabs defaultValue="public" className="space-y-10">
           <div className="flex justify-center mb-2">
             <TabsList className="inline-flex h-auto bg-white shadow-lg border border-slate-200 rounded-2xl p-2 backdrop-blur-sm overflow-x-auto">
-              <TabsTrigger value="overview" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
-                <PieChartIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Overview</span>
+              <TabsTrigger value="public" className="flex items-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <Eye className="w-4 h-4" />
+                <span className="hidden sm:inline">Public View</span>
               </TabsTrigger>
-              <TabsTrigger value="incidents" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
-                <Activity className="w-4 h-4" />
-                <span className="hidden sm:inline">Incident Analysis</span>
+              <TabsTrigger value="industry" className="flex items-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <Briefcase className="w-4 h-4" />
+                <span className="hidden sm:inline">Industry Professionals</span>
               </TabsTrigger>
-              <TabsTrigger value="geographic" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
-                <Globe className="w-4 h-4" />
-                <span className="hidden sm:inline">Geographic</span>
-              </TabsTrigger>
-              <TabsTrigger value="employers" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
-                <Building className="w-4 h-4" />
-                <span className="hidden sm:inline">Employer Risk</span>
-              </TabsTrigger>
-              <TabsTrigger value="performance" className="flex items-center gap-2 px-3 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
-                <LineChartIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Performance</span>
+              <TabsTrigger value="policy" className="flex items-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 hover:bg-slate-50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-900 data-[state=active]:to-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md whitespace-nowrap">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Policymakers & Regulators</span>
               </TabsTrigger>
             </TabsList>
           </div>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-8 animate-in fade-in-0 duration-200">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <MetricCard
-                title="Total Incidents"
-                value={data.summary.totalReports.toLocaleString()}
-                subtitle="All time records"
-                icon={FileText}
-                color="blue"
-              />
-              <MetricCard
-                title="This Month"
-                value={data.summary.monthReports.toLocaleString()}
-                subtitle="vs last month"
-                icon={Calendar}
-                color="purple"
-                trend={{
-                  value: data.summary.monthOverMonthChange,
-                  positive: data.summary.monthOverMonthChange < 0
-                }}
-              />
-              <MetricCard
-                title="Critical Incidents"
-                value={data.summary.criticalIncidents.toLocaleString()}
-                subtitle="Immediate attention required"
-                icon={AlertTriangle}
-                color="red"
-              />
-              <MetricCard
-                title="Resolution Rate"
-                value={`${data.summary.resolutionRate.toFixed(1)}%`}
-                subtitle={`Avg: ${data.summary.avgResponseTimeHours.toFixed(1)}h response`}
-                icon={CheckCircle}
-                color="green"
-              />
+          {/* PUBLIC VIEW - General Public Dashboard */}
+          <TabsContent value="public" className="space-y-8 animate-in fade-in-0 duration-200">
+            {/* Header Section */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 text-white">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                  <Eye className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold">Public Safety Dashboard</h2>
+                  <p className="text-blue-100 text-lg">Transparent workplace safety insights for Guyana</p>
+                </div>
+              </div>
+              
+              {/* Key Public Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <Shield className="w-8 h-8 text-blue-200" />
+                    <div>
+                      <p className="text-sm text-blue-200">Days Since Last Major Incident</p>
+                      <p className="text-3xl font-bold">{data.public?.totalIncidents.daysSinceLastMajor || 12}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="w-8 h-8 text-emerald-200" />
+                    <div>
+                      <p className="text-sm text-blue-200">Incidents Resolved</p>
+                      <p className="text-3xl font-bold">{data.public?.totalIncidents.percentageResolved || 0}%</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <TrendingUp className="w-8 h-8 text-yellow-200" />
+                    <div>
+                      <p className="text-sm text-blue-200">This Year</p>
+                      <p className="text-3xl font-bold">{data.public?.totalIncidents.thisYear || 245}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Summary Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Monthly Trend */}
+              {/* Incidents by Severity */}
               <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-white" />
-                    </div>
-                    Monthly Incident Trend
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <AlertTriangle className="w-6 h-6 text-red-500" />
+                    Incidents by Severity
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6">
-                  <ResponsiveContainer width="100%" height={320}>
-                    <AreaChart data={monthlyTrendData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                      <YAxis stroke="#64748b" fontSize={12} />
-                      <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                      <Legend />
-                      <Area type="monotone" dataKey="critical" stackId="1" stroke={COLORS.critical} fill={COLORS.critical} fillOpacity={0.9} />
-                      <Area type="monotone" dataKey="high" stackId="1" stroke={COLORS.high} fill={COLORS.high} fillOpacity={0.9} />
-                      <Area type="monotone" dataKey="medium" stackId="1" stroke={COLORS.medium} fill={COLORS.medium} fillOpacity={0.9} />
-                      <Area type="monotone" dataKey="low" stackId="1" stroke={COLORS.low} fill={COLORS.low} fillOpacity={0.9} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Severity Distribution */}
-              <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                      <PieChartIcon className="w-5 h-5 text-white" />
-                    </div>
-                    Severity Distribution
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <ResponsiveContainer width="100%" height={320}>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
-                        data={severityData}
+                        data={data.public?.incidentsBySeverity.map(item => ({
+                          name: item.severity.charAt(0) + item.severity.slice(1).toLowerCase(),
+                          value: item.count,
+                          fill: item.severity === 'CRITICAL' ? COLORS.critical :
+                                item.severity === 'HIGH' ? COLORS.high :
+                                item.severity === 'MEDIUM' ? COLORS.medium : COLORS.low
+                        })) || []}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
                         label={(entry) => `${entry.name}: ${entry.value}`}
-                        outerRadius={90}
-                        fill="#8884d8"
+                        outerRadius={100}
                         dataKey="value"
                       >
-                        {severityData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                      <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
 
-          {/* Incident Analysis Tab */}
-          <TabsContent value="incidents" className="space-y-8 animate-in fade-in-0 duration-200">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Hourly Distribution */}
-              <Card className="lg:col-span-2 bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-white" />
-                    </div>
-                    Incidents by Hour of Day
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={hourlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="hour" stroke="#64748b" fontSize={12} />
-                      <YAxis stroke="#64748b" fontSize={12} />
-                      <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                      <Bar dataKey="incidents" fill={COLORS.primary} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Reporter Types */}
+              {/* Common Incident Types */}
               <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                      <Users className="w-5 h-5 text-white" />
-                    </div>
-                    Reporter Types
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <BarChart3 className="w-6 h-6 text-blue-500" />
+                    Most Common Incident Types
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-6">
-                    {data.distributions.reporterTypes.map((type) => {
-                      const percentage = (type.count / data.summary.totalReports) * 100;
+                <CardContent>
+                  <div className="space-y-4">
+                    {(data.public?.incidentsByType || []).map((item, index) => {
+                      const total = data.public?.totalIncidents.thisYear || 1;
+                      const percentage = (item.count / total) * 100;
                       return (
-                        <div key={type.type}>
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="font-semibold text-slate-700">{type.type}</span>
-                            <span className="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-full">{percentage.toFixed(1)}%</span>
+                        <div key={item.type} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-slate-700">{item.type}</span>
+                            <span className="text-sm text-slate-600">{item.count} ({percentage.toFixed(1)}%)</span>
                           </div>
                           <div className="w-full bg-slate-200 rounded-full h-3">
                             <div 
-                              className="bg-gradient-to-r from-slate-800 to-slate-700 h-3 rounded-full transition-all duration-300" 
+                              className="h-3 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
                               style={{ width: `${percentage}%` }}
                             />
                           </div>
@@ -523,367 +452,502 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
-            {/* Incident Types */}
+            {/* Monthly Trend */}
             <Card className="bg-white shadow-sm border border-slate-200">
-              <CardHeader className="border-b border-slate-100 pb-4">
-                <CardTitle className="flex items-center gap-3 text-slate-900">
-                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-white" />
-                  </div>
-                  Incident Types Distribution
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3">
+                  <LineChartIcon className="w-6 h-6 text-indigo-500" />
+                  Monthly Incident Trends & Types
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent>
                 <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={incidentTypeData} layout="horizontal">
+                  <AreaChart data={data.public?.monthlyTrends || []}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis type="number" stroke="#64748b" fontSize={12} />
-                    <YAxis dataKey="type" type="category" width={120} stroke="#64748b" fontSize={12} />
+                    <XAxis dataKey="month" stroke="#64748b" />
+                    <YAxis stroke="#64748b" />
                     <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                    <Bar dataKey="count" fill={COLORS.primary} radius={[0, 6, 6, 0]} />
-                  </BarChart>
+                    <Legend />
+                    <Area type="monotone" dataKey="incidents" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.8} name="Total Incidents" />
+                    <Area type="monotone" dataKey="resolved" stackId="1" stroke="#16a34a" fill="#16a34a" fillOpacity={0.8} name="Resolved" />
+                  </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
 
-            {/* Daily Trend */}
-            <Card className="bg-white shadow-sm border border-slate-200">
-              <CardHeader className="border-b border-slate-100 pb-4">
-                <CardTitle className="flex items-center gap-3 text-slate-900">
-                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-white" />
-                  </div>
-                  Daily Trend (Last 30 Days)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <ResponsiveContainer width="100%" height={320}>
-                  <LineChart data={dailyTrendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
-                    <YAxis stroke="#64748b" fontSize={12} />
-                    <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="incidents" 
-                      stroke={COLORS.primary} 
-                      strokeWidth={3}
-                      dot={{ fill: COLORS.primary, strokeWidth: 2, r: 5 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Geographic Tab */}
-          <TabsContent value="geographic" className="space-y-8 animate-in fade-in-0 duration-200">
-            {/* Geographic Heatmap */}
-            <Card className="bg-white shadow-sm border border-slate-200 overflow-hidden">
-              <CardHeader className="border-b border-slate-100 pb-6">
-                <CardTitle className="flex items-center gap-4 text-slate-900">
-                  <div className="w-12 h-12 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center shadow-lg">
-                    <MapPin className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-slate-900">Geographic Incident Distribution</h3>
-                    <p className="text-slate-600 mt-1 text-sm">Interactive heatmap showing incident density across Guyana</p>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                      <span className="text-slate-600">Critical</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
-                      <span className="text-slate-600">High</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-                      <span className="text-slate-600">Medium</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                      <span className="text-slate-600">Low</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl p-6 border border-slate-200">
-                    <GuyanaHeatmap data={data.geographic.heatmapData} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Locations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Geographic Heatmap */}
               <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center">
-                      <MapPin className="w-5 h-5 text-white" />
-                    </div>
-                    Top Affected Locations
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <MapPin className="w-6 h-6 text-green-500" />
+                    Incident Locations
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {data.geographic.topLocations.slice(0, 8).map((loc, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold ${
-                            index === 0 ? 'bg-gradient-to-br from-red-500 to-red-600' :
-                            index === 1 ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
-                            index === 2 ? 'bg-gradient-to-br from-yellow-500 to-yellow-600' :
-                            'bg-gradient-to-br from-slate-500 to-slate-600'
-                          }`}>
-                            {index + 1}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-slate-900">{loc.location}</p>
-                            {loc.criticalCount > 0 && (
-                              <div className="flex items-center gap-1 mt-1">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                <p className="text-sm text-red-600 font-medium">{loc.criticalCount} critical incidents</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-bold text-slate-900">{loc.count}</span>
-                          <span className="text-sm text-slate-500 block">incidents</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <CardContent>
+                  <GuyanaHeatmap data={data.public?.geographic?.heatmapData || []} />
                 </CardContent>
               </Card>
 
-              {/* Geographic Statistics */}
+              {/* Investigation Outcomes */}
               <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                      <Globe className="w-5 h-5 text-white" />
-                    </div>
-                    Geographic Statistics
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <Search className="w-6 h-6 text-purple-500" />
+                    Investigation Outcomes
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-6">
-                    <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                      <div className="flex items-center justify-between">
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-8 h-8 text-green-600" />
                         <div>
-                          <p className="text-sm font-medium text-blue-700">Total Locations</p>
-                          <p className="text-2xl font-bold text-blue-900">{data.geographic.topLocations.length}</p>
-                        </div>
-                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-                          <MapPin className="w-6 h-6 text-white" />
+                          <p className="text-2xl font-bold text-green-900">{data.public?.outcomes?.investigationStats?.completed ?? 0}</p>
+                          <p className="text-sm text-green-700">Completed</p>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="p-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-200">
-                      <div className="flex items-center justify-between">
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                      <div className="flex items-center gap-3">
+                        <Clock className="w-8 h-8 text-blue-600" />
                         <div>
-                          <p className="text-sm font-medium text-red-700">Critical Hotspots</p>
-                          <p className="text-2xl font-bold text-red-900">{data.geographic.topLocations.filter(loc => loc.criticalCount > 0).length}</p>
-                        </div>
-                        <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center">
-                          <AlertTriangle className="w-6 h-6 text-white" />
+                          <p className="text-2xl font-bold text-blue-900">{data.public?.outcomes?.investigationStats?.ongoing ?? 0}</p>
+                          <p className="text-sm text-blue-700">Ongoing</p>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-emerald-700">Avg Incidents/Location</p>
-                          <p className="text-2xl font-bold text-emerald-900">{(data.geographic.topLocations.reduce((sum, loc) => sum + loc.count, 0) / data.geographic.topLocations.length).toFixed(1)}</p>
-                        </div>
-                        <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center">
-                          <BarChart3 className="w-6 h-6 text-white" />
-                        </div>
-                      </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-6 border border-slate-200">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-slate-900">{data.public?.outcomes?.resolutionRate ?? 0}%</p>
+                      <p className="text-slate-600">Average Resolution Rate</p>
+                      <p className="text-sm text-slate-500 mt-2">Avg time: {data.public?.outcomes?.avgInvestigationTime ?? 0} days</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
 
-          {/* Employer Risk Tab */}
-          <TabsContent value="employers" className="space-y-8 animate-in fade-in-0 duration-200">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* High-Risk Employers */}
-              <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center">
-                      <AlertTriangle className="w-5 h-5 text-white" />
-                    </div>
-                    High-Risk Employers
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {data.employers?.worstPerformers?.slice(0, 10).map((employer, index) => (
-                      <div key={employer._id} className="p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-3">
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold ${
-                                employer.riskScore > 50 ? 'bg-gradient-to-br from-red-500 to-red-600' : 
-                                employer.riskScore > 30 ? 'bg-gradient-to-br from-orange-500 to-orange-600' : 
-                                employer.riskScore > 10 ? 'bg-gradient-to-br from-yellow-500 to-yellow-600' : 'bg-gradient-to-br from-green-500 to-green-600'
-                              }`}>
-                                {index + 1}
-                              </div>
-                              <p className="font-semibold text-slate-900">{employer._id}</p>
-                            </div>
-                            <p className="text-sm text-slate-600 mb-3 bg-slate-100 px-3 py-1 rounded-full inline-block">{employer.industry} • {employer.companySize}</p>
-                            <div className="flex gap-4 text-sm">
-                              <span className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-600 rounded-full"></div><strong>{employer.totalIncidents}</strong> incidents</span>
-                              <span className="flex items-center gap-1 text-red-600"><div className="w-2 h-2 bg-red-500 rounded-full"></div><strong>{employer.criticalIncidents}</strong> critical</span>
-                              <span className="flex items-center gap-1 text-orange-600"><div className="w-2 h-2 bg-orange-500 rounded-full"></div><strong>{employer.totalCasualties}</strong> casualties</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-slate-900">{employer.riskScore.toFixed(0)}</div>
-                            <div className="text-sm text-slate-500 font-medium">Risk Score</div>
-                          </div>
-                        </div>
-                      </div>
-                    )) || (
-                      <div className="text-center py-8 text-slate-500">
-                        <p>No employer data available</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Industry Risk Analysis */}
-              <Card className="bg-white shadow-sm border border-slate-200">
-                <CardHeader className="border-b border-slate-100 pb-4">
-                  <CardTitle className="flex items-center gap-3 text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
-                      <BarChart3 className="w-5 h-5 text-white" />
-                    </div>
-                    Industry Risk Analysis
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {data.employers?.industryRisk?.map((industry, index) => (
-                      <div key={industry._id} className="p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-sm font-bold">
-                              {index + 1}
-                            </div>
-                            <p className="font-semibold text-slate-900">{industry._id}</p>
-                          </div>
-                          <span className="text-sm text-slate-600 bg-slate-100 px-3 py-1 rounded-full font-medium">{industry.uniqueCompanies} companies</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-600 rounded-full"></div>{industry.totalIncidents} incidents</span>
-                          <span className="flex items-center gap-1 text-red-600"><div className="w-2 h-2 bg-red-500 rounded-full"></div>{industry.criticalIncidents} critical</span>
-                          <span className="flex items-center gap-1 font-semibold text-purple-600"><div className="w-2 h-2 bg-purple-500 rounded-full"></div>{industry.incidentRate.toFixed(1)}/company</span>
-                        </div>
-                      </div>
-                    )) || (
-                      <div className="text-center py-8 text-slate-500">
-                        <p>No industry data available</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Performance Tab */}
-          <TabsContent value="performance" className="space-y-8 animate-in fade-in-0 duration-200">
-            {/* Resolution Rates */}
+            {/* Recent Published Reports */}
             <Card className="bg-white shadow-sm border border-slate-200">
-              <CardHeader className="border-b border-slate-100 pb-4">
-                <CardTitle className="flex items-center gap-3 text-slate-900">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-white" />
-                  </div>
-                  Resolution Rates by Severity
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-slate-600" />
+                  Recent Published Investigation Reports
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="space-y-6">
-                  {data.performance.resolutionRates.map((item) => (
-                    <div key={item.severity}>
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center gap-3">
+              <CardContent>
+                <div className="space-y-4">
+                  {(data.public?.publishedReports || []).length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No published investigation reports yet</p>
+                    </div>
+                  ) : (
+                    (data.public?.publishedReports || []).map((report, index) => (
+                      <div key={report._id} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all duration-200 border border-slate-200">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <Badge variant="outline" className="text-xs">{report.publicId}</Badge>
+                            <Badge className="text-xs bg-blue-100 text-blue-700">{report.industry}</Badge>
+                          </div>
+                          <h4 className="font-semibold text-slate-900 mb-1">{report.title}</h4>
+                          <p className="text-sm text-slate-600">{report.location} • {new Date(report.publishedAt).toLocaleDateString()}</p>
+                        </div>
+                        <Button variant="outline" size="sm" className="flex items-center gap-2">
+                          <Eye className="w-4 h-4" />
+                          View Report
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* INDUSTRY PROFESSIONALS VIEW */}
+          <TabsContent value="industry" className="space-y-8 animate-in fade-in-0 duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-green-700 rounded-2xl p-8 text-white">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                  <Briefcase className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold">Industry Analytics</h2>
+                  <p className="text-emerald-100 text-lg">Incident patterns and regional analysis</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Top Incident Causes */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <AlertTriangle className="w-6 h-6 text-orange-500" />
+                    Top Incident Causes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {data?.industry?.topCauses?.map((item, index) => (
+                      <div key={item.cause} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-slate-700">{item.cause}</span>
+                          <span className="text-sm text-slate-600">{item.count}</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-3">
                           <div 
-                            className="w-5 h-5 rounded-xl"
-                            style={{ backgroundColor: COLORS[item.severity.toLowerCase() as keyof typeof COLORS] || COLORS.neutral }}
+                            className="h-3 rounded-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-300"
+                            style={{ width: `${data.industry.topCauses.length > 0 ? (item.count / Math.max(...data.industry.topCauses.map(c => c.count))) * 100 : 0}%` }}
                           />
-                          <span className="font-semibold text-slate-700">{item.severity}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xl font-bold text-slate-900">{item.rate.toFixed(1)}%</span>
-                          <span className="text-sm text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-full">{item.resolved}/{item.total}</span>
                         </div>
                       </div>
-                      <div className="w-full bg-slate-200 rounded-full h-4">
-                        <div 
-                          className="h-4 rounded-full transition-all duration-300"
-                          style={{ 
-                            width: `${item.rate}%`,
-                            backgroundColor: COLORS[item.severity.toLowerCase() as keyof typeof COLORS] || COLORS.neutral
-                          }}
-                        />
+                    )) || (
+                      <p className="text-gray-500 text-sm">No incident data available</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Regional Incident Density */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <MapPin className="w-6 h-6 text-purple-500" />
+                    Regional Incident Density
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {data?.industry?.regionalDensity?.map((item, index) => (
+                      <div key={item.region} className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              item.density === 'High' ? 'bg-red-500' :
+                              item.density === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'
+                            }`} />
+                            <span className="font-semibold text-slate-900">{item.region}</span>
+                          </div>
+                          <Badge variant="outline" className={
+                            item.density === 'High' ? 'border-red-200 text-red-700' :
+                            item.density === 'Medium' ? 'border-yellow-200 text-yellow-700' : 'border-green-200 text-green-700'
+                          }>
+                            {item.density} Density
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-slate-600">
+                          <span>{item.incidents} incidents reported</span>
+                        </div>
+                      </div>
+                    )) || (
+                      <p className="text-gray-500 text-sm">No regional data available</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Safety Materials & Resources */}
+            <Card className="bg-white shadow-sm border border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-emerald-500" />
+                  Safety Materials & Resources
+                </CardTitle>
+                <p className="text-sm text-slate-600 mt-2">
+                  Essential safety documents and guidelines for industry professionals
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Safety Manual */}
+                  <a
+                    href="https://docs.google.com/document/d/1mhqnAos3FzySY9_BaD6XGXMb8xn2PEZBMWgVhf1BQ5Q/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 hover:border-emerald-300 transition-all duration-200 cursor-pointer block"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                        <FileText className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-emerald-900 mb-1">Workplace Safety Manual</h4>
+                        <p className="text-sm text-emerald-700 mb-2">Comprehensive guide to workplace safety protocols</p>
+                        <div className="flex items-center gap-2 text-xs text-emerald-600">
+                          <span className="px-2 py-1 bg-emerald-100 rounded-full">Google Docs</span>
+                          <span>Click to open</span>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  </a>
+
+                  {/* Emergency Procedures */}
+                  <a
+                    href="https://docs.google.com/document/d/1mhqnAos3FzySY9_BaD6XGXMb8xn2PEZBMWgVhf1BQ5Q/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group p-4 rounded-xl bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 hover:border-red-300 transition-all duration-200 cursor-pointer block"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                        <AlertTriangle className="w-6 h-6 text-red-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-red-900 mb-1">Emergency Response Procedures</h4>
+                        <p className="text-sm text-red-700 mb-2">Step-by-step emergency response protocols</p>
+                        <div className="flex items-center gap-2 text-xs text-red-600">
+                          <span className="px-2 py-1 bg-red-100 rounded-full">Google Docs</span>
+                          <span>Click to open</span>
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+
+                  {/* Training Materials */}
+                  <a
+                    href="https://docs.google.com/document/d/1mhqnAos3FzySY9_BaD6XGXMb8xn2PEZBMWgVhf1BQ5Q/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 hover:border-blue-300 transition-all duration-200 cursor-pointer block"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                        <Users className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-blue-900 mb-1">Safety Training Materials</h4>
+                        <p className="text-sm text-blue-700 mb-2">Employee training resources and checklists</p>
+                        <div className="flex items-center gap-2 text-xs text-blue-600">
+                          <span className="px-2 py-1 bg-blue-100 rounded-full">Google Docs</span>
+                          <span>Click to open</span>
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+
+                  {/* PPE Guidelines */}
+                  <a
+                    href="https://docs.google.com/document/d/1mhqnAos3FzySY9_BaD6XGXMb8xn2PEZBMWgVhf1BQ5Q/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group p-4 rounded-xl bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200 hover:border-purple-300 transition-all duration-200 cursor-pointer block"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                        <Shield className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-purple-900 mb-1">PPE Guidelines</h4>
+                        <p className="text-sm text-purple-700 mb-2">Personal protective equipment selection guide</p>
+                        <div className="flex items-center gap-2 text-xs text-purple-600">
+                          <span className="px-2 py-1 bg-purple-100 rounded-full">Google Docs</span>
+                          <span>Click to open</span>
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+
+                  {/* Risk Assessment */}
+                  <a
+                    href="https://docs.google.com/document/d/1mhqnAos3FzySY9_BaD6XGXMb8xn2PEZBMWgVhf1BQ5Q/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group p-4 rounded-xl bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200 hover:border-yellow-300 transition-all duration-200 cursor-pointer block"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
+                        <TrendingDown className="w-6 h-6 text-yellow-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-yellow-900 mb-1">Risk Assessment Templates</h4>
+                        <p className="text-sm text-yellow-700 mb-2">Workplace risk evaluation forms and matrices</p>
+                        <div className="flex items-center gap-2 text-xs text-yellow-600">
+                          <span className="px-2 py-1 bg-yellow-100 rounded-full">Google Docs</span>
+                          <span>Click to open</span>
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+
+                  {/* Incident Report Forms */}
+                  <a
+                    href="https://docs.google.com/document/d/1mhqnAos3FzySY9_BaD6XGXMb8xn2PEZBMWgVhf1BQ5Q/edit?usp=sharing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group p-4 rounded-xl bg-gradient-to-br from-slate-50 to-gray-50 border border-slate-200 hover:border-slate-300 transition-all duration-200 cursor-pointer block"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                        <Search className="w-6 h-6 text-slate-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-slate-900 mb-1">Incident Report Forms</h4>
+                        <p className="text-sm text-slate-700 mb-2">Standardized incident reporting templates</p>
+                        <div className="flex items-center gap-2 text-xs text-slate-600">
+                          <span className="px-2 py-1 bg-slate-100 rounded-full">Google Docs</span>
+                          <span>Click to open</span>
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+                </div>
+
+                <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-slate-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">Need Additional Resources?</h4>
+                      <p className="text-sm text-slate-600">Contact our safety team for industry-specific materials and consultation</p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            {/* Status Distribution */}
-            <Card className="bg-white shadow-sm border border-slate-200">
-              <CardHeader className="border-b border-slate-100 pb-4">
-                <CardTitle className="flex items-center gap-3 text-slate-900">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-white" />
+          {/* POLICYMAKERS & REGULATORS VIEW */}
+          <TabsContent value="policy" className="space-y-8 animate-in fade-in-0 duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-2xl p-8 text-white">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                  <Scale className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold">Policy & Regulatory Overview</h2>
+                  <p className="text-indigo-100 text-lg">National incident tracking and investigation pipeline</p>
+                </div>
+              </div>
+              
+              {/* Real National Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <TrendingDown className="w-8 h-8 text-indigo-200" />
+                    <div>
+                      <p className="text-sm text-indigo-200">Total Incidents This Year</p>
+                      <p className="text-3xl font-bold">{data?.policy?.nationalMetrics?.accidentRate || 0}</p>
+                      <p className="text-xs text-indigo-200">incidents reported</p>
+                    </div>
                   </div>
-                  Report Status Distribution
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <ResponsiveContainer width="100%" height={320}>
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) => `${entry.name}: ${entry.value}`}
-                      outerRadius={90}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS.primary} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+                </div>
+                
+                <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <TrendingUp className="w-8 h-8 text-green-200" />
+                    <div>
+                      <p className="text-sm text-indigo-200">YoY Change</p>
+                      <p className={`text-3xl font-bold ${(data?.policy?.nationalMetrics?.yoyChange || 0) < 0 ? 'text-green-200' : 'text-red-200'}`}>
+                        {(data?.policy?.nationalMetrics?.yoyChange || 0) > 0 ? '+' : ''}{(data?.policy?.nationalMetrics?.yoyChange || 0).toFixed(1)}%
+                      </p>
+                      <p className="text-xs text-indigo-200">vs last year</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Investigation Pipeline */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <Search className="w-6 h-6 text-blue-500" />
+                    Investigation Pipeline Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {(data.policy?.investigationPipeline || []).map((item, index) => (
+                      <div key={item.status} className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full ${item.color.replace('bg-', 'bg-')}`} />
+                            <span className="font-semibold text-slate-900">{item.status}</span>
+                          </div>
+                          <span className="text-2xl font-bold text-slate-700">{item.count}</span>
+                        </div>
+                        <p className="text-sm text-slate-600 pl-7">{item.description}</p>
+                      </div>
+                    )) || (
+                      <p className="text-gray-500 text-sm">No investigation data available</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Public Engagement Metrics */}
+              <Card className="bg-white shadow-sm border border-slate-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <Users className="w-6 h-6 text-green-500" />
+                    Public Engagement & Transparency
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Eye className="w-5 h-5 text-blue-600" />
+                          <span className="font-semibold text-blue-900">Public Reports</span>
+                        </div>
+                        <p className="text-2xl font-bold text-blue-700">{data.policy?.publicEngagement?.publicReports ?? 0}</p>
+                        <p className="text-sm text-blue-600">published this month</p>
+                      </div>
+                      <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="w-5 h-5 text-green-600" />
+                          <span className="font-semibold text-green-900">Citizen Reports</span>
+                        </div>
+                        <p className="text-2xl font-bold text-green-700">{data.policy?.publicEngagement?.citizenReports ?? 0}</p>
+                        <p className="text-sm text-green-600">reports received</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-slate-900">Engagement Channels</h4>
+                      {(data.policy?.publicEngagement?.channels || []).length === 0 ? (
+                        <div className="text-center py-4">
+                          <p className="text-gray-500 text-sm">No channel data available</p>
+                        </div>
+                      ) : (
+                        (data.policy?.publicEngagement?.channels || []).map((item, index) => (
+                          <div key={item.channel} className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="font-medium text-slate-700">{item.channel}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-600">{item.reports} reports</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                                  {item.percentage}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-slate-200 rounded-full h-2">
+                              <div 
+                                className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-300"
+                                style={{ width: `${Math.min(item.percentage, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
           </TabsContent>
         </Tabs>
       </div>

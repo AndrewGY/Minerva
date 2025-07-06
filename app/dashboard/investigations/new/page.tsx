@@ -342,7 +342,7 @@ export default function NewInvestigationPage() {
                   <p><strong>Type:</strong> {selectedReport.incidentType}</p>
                   <p><strong>Severity:</strong> {selectedReport.severityLevel}</p>
                   <p><strong>Date:</strong> {new Date(selectedReport.incidentDate).toLocaleDateString()}</p>
-                  <p><strong>Location:</strong> {selectedReport.location.address}</p>
+                  <p><strong>Location:</strong> {selectedReport.location?.address || "No location provided"}</p>
                 </div>
               </div>
             )}

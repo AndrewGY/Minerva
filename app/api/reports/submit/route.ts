@@ -10,7 +10,7 @@ import { z } from "zod";
 const externalReportSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters"),
   location: z.object({
-    address: z.string().min(1, "Address is required"),
+    address: z.string().optional(),
     lat: z.number().optional(),
     lng: z.number().optional(),
   }),
@@ -136,12 +136,43 @@ export async function POST(request: NextRequest) {
       attachments.push(uploadedFile);
     }
 
+    // Geocode address if coordinates are missing
+    let lat = validatedData.location.lat;
+    let lng = validatedData.location.lng;
+    
+    if (!lat || !lng) {
+      // Default coordinates for Guyana regions if geocoding fails
+      const guyanaRegionCoords: Record<string, {lat: number, lng: number}> = {
+        'georgetown': { lat: 6.8013, lng: -58.1551 },
+        'new amsterdam': { lat: 6.2507, lng: -57.5159 },
+        'linden': { lat: 6.0078, lng: -58.3067 },
+        'anna regina': { lat: 7.2678, lng: -58.5089 },
+        'bartica': { lat: 6.3986, lng: -58.6177 },
+        'berbice': { lat: 6.0983, lng: -57.5314 },
+      };
+      
+      // Try to match address to known regions
+      const address = validatedData.location.address.toLowerCase();
+      const matchedRegion = Object.keys(guyanaRegionCoords).find(region => 
+        address.includes(region)
+      );
+      
+      if (matchedRegion) {
+        lat = guyanaRegionCoords[matchedRegion].lat;
+        lng = guyanaRegionCoords[matchedRegion].lng;
+      } else {
+        // Default to Georgetown if no match found
+        lat = 6.8013;
+        lng = -58.1551;
+      }
+    }
+
     const reportData = {
       incidentDate,
       location: {
         address: validatedData.location.address,
-        lat: validatedData.location.lat || 0,
-        lng: validatedData.location.lng || 0,
+        lat,
+        lng,
       },
       description: validatedData.description,
       incidentType: validation.incidentType || 'other',

@@ -19,9 +19,12 @@ export interface IAttachment {
 }
 
 export interface ILocation {
-  lat: number;
-  lng: number;
-  address: string;
+  lat?: number;
+  lng?: number;
+  latitude?: number;  // Alternative format for WhatsApp/external sources
+  longitude?: number; // Alternative format for WhatsApp/external sources
+  address?: string;
+  name?: string;
 }
 
 export interface IReport extends Document {
@@ -42,13 +45,16 @@ export interface IReport extends Document {
   assignedOfficerId?: mongoose.Types.ObjectId;
   attachments: IAttachment[];
   employerId?: mongoose.Types.ObjectId;
+  source?: string; // For WhatsApp and other direct source integrations
   metadata?: {
     source?: string;
     articleUrl?: string;
+    postUrl?: string;
     validationConfidence?: number;
     validationReason?: string;
     imagePaths?: string[];
   };
+  isVerified?: boolean; // For external sources verification
   createdAt: Date;
   updatedAt: Date;
   resolvedAt?: Date;
@@ -73,9 +79,12 @@ const attachmentSchema = new Schema<IAttachment>({
 });
 
 const locationSchema = new Schema<ILocation>({
-  lat: { type: Number, required: true },
-  lng: { type: Number, required: true },
-  address: { type: String, required: true },
+  lat: { type: Number, required: false },
+  lng: { type: Number, required: false },
+  latitude: { type: Number, required: false },  // Alternative format
+  longitude: { type: Number, required: false }, // Alternative format
+  address: { type: String, required: false },
+  name: { type: String, required: false },
 });
 
 const reportSchema = new Schema<IReport>(
@@ -134,13 +143,16 @@ const reportSchema = new Schema<IReport>(
       ref: 'User',
     },
     attachments: [attachmentSchema],
+    source: String, // For WhatsApp and other direct source integrations
     metadata: {
       source: String,
       articleUrl: String,
+      postUrl: String,
       validationConfidence: Number,
       validationReason: String,
       imagePaths: [String],
     },
+    isVerified: { type: Boolean, default: false },
     resolvedAt: Date,
   },
   {
