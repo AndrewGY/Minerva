@@ -34,6 +34,11 @@ class OfflineStorageManager {
   }
 
   async init(): Promise<void> {
+    if (typeof window === 'undefined' || !('indexedDB' in window)) {
+      // Skip initialization on server-side
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
 
@@ -56,6 +61,7 @@ class OfflineStorageManager {
   }
 
   async saveReport(id: string, formData: any, files: File[] = []): Promise<void> {
+    if (typeof window === 'undefined') return;
     if (!this.db) await this.init();
 
     const processedFiles = await Promise.all(
@@ -88,6 +94,7 @@ class OfflineStorageManager {
   }
 
   async getReport(id: string): Promise<OfflineReport | null> {
+    if (typeof window === 'undefined') return null;
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -101,6 +108,7 @@ class OfflineStorageManager {
   }
 
   async getAllReports(): Promise<OfflineReport[]> {
+    if (typeof window === 'undefined') return [];
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -114,6 +122,7 @@ class OfflineStorageManager {
   }
 
   async getPendingReports(): Promise<OfflineReport[]> {
+    if (typeof window === 'undefined') return [];
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -128,6 +137,7 @@ class OfflineStorageManager {
   }
 
   async markForSubmission(id: string): Promise<void> {
+    if (typeof window === 'undefined') return;
     const report = await this.getReport(id);
     if (report) {
       report.status = 'pending_submission';
@@ -137,6 +147,7 @@ class OfflineStorageManager {
   }
 
   async markAsSubmitted(id: string): Promise<void> {
+    if (typeof window === 'undefined') return;
     const report = await this.getReport(id);
     if (report) {
       report.status = 'submitted';
@@ -146,6 +157,7 @@ class OfflineStorageManager {
   }
 
   async markAsFailed(id: string): Promise<void> {
+    if (typeof window === 'undefined') return;
     const report = await this.getReport(id);
     if (report) {
       report.status = 'failed';
@@ -155,6 +167,7 @@ class OfflineStorageManager {
   }
 
   async deleteReport(id: string): Promise<void> {
+    if (typeof window === 'undefined') return;
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -192,6 +205,7 @@ class OfflineStorageManager {
   }
 
   private async saveReportDirect(report: OfflineReport): Promise<void> {
+    if (typeof window === 'undefined') return;
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {

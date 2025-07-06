@@ -76,6 +76,7 @@ export default function SubmitReport() {
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [savedOffline, setSavedOffline] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -103,7 +104,7 @@ export default function SubmitReport() {
       const formData = form.getValues();
       await offlineStorage.saveReport(reportId, formData, files.map(f => f.file));
       setLastSaved(new Date());
-      setSavedOffline(true);
+      // Don't set savedOffline=true during auto-save - this is just draft saving
     } catch (error) {
       console.error('Auto-save failed:', error);
     } finally {
@@ -111,8 +112,15 @@ export default function SubmitReport() {
     }
   };
 
-  // Load saved draft on component mount
+  // Client-side mount effect
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Load saved draft on component mount (client-side only)
+  useEffect(() => {
+    if (!isMounted) return;
+
     const loadSavedDraft = async () => {
       try {
         const savedReport = await offlineStorage.getReport(reportId);
@@ -131,7 +139,8 @@ export default function SubmitReport() {
           setFiles(restoredFiles);
           
           setLastSaved(new Date(savedReport.lastModified));
-          setSavedOffline(true);
+          // Only set savedOffline if the report was actually marked for submission
+          setSavedOffline(savedReport.status === 'pending_submission');
         }
       } catch (error) {
         console.error('Failed to load draft:', error);
@@ -139,24 +148,26 @@ export default function SubmitReport() {
     };
 
     loadSavedDraft();
-  }, [reportId, form]);
+  }, [isMounted, reportId, form]);
 
-  // Auto-save on form changes
+  // Auto-save on form changes (client-side only)
   useEffect(() => {
+    if (!isMounted) return;
+
     const subscription = form.watch(() => {
       const timeoutId = setTimeout(autoSave, 2000); // Debounce 2 seconds
       return () => clearTimeout(timeoutId);
     });
     return () => subscription.unsubscribe();
-  }, [form, files]);
+  }, [isMounted, form, files]);
 
-  // Auto-save when files change
+  // Auto-save when files change (client-side only)
   useEffect(() => {
-    if (files.length > 0) {
-      const timeoutId = setTimeout(autoSave, 1000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [files]);
+    if (!isMounted || files.length === 0) return;
+
+    const timeoutId = setTimeout(autoSave, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [isMounted, files]);
 
   const handleLocationSelect = (locationData: { address: string; lat: number; lng: number }) => {
     form.setValue("location.address", locationData.address);
@@ -302,6 +313,7 @@ export default function SubmitReport() {
       await offlineStorage.markAsSubmitted(reportId);
       setPublicId(result.publicId);
       setSubmitted(true);
+      setSavedOffline(false); // Ensure this is false for successful online submission
       form.reset();
       
       files.forEach(file => {
@@ -432,67 +444,69 @@ export default function SubmitReport() {
             Report safety incidents securely. All reports are treated confidentially.
           </p>
 
-          {/* Offline Status & Auto-save Indicator */}
-          <div className="mt-4 flex flex-wrap gap-3">
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${
-              isOnline 
-                ? isSlowConnection 
-                  ? 'bg-yellow-100 text-yellow-800' 
-                  : 'bg-green-100 text-green-800'
-                : 'bg-orange-100 text-orange-800'
-            }`}>
-              {isOnline ? (
-                <>
-                  <Wifi className="w-4 h-4" />
-                  {isSlowConnection ? 'Slow Connection' : 'Online'}
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-4 h-4" />
-                  Offline Mode
-                </>
+          {/* Offline Status & Auto-save Indicator - Client-side only */}
+          {isMounted && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${
+                isOnline 
+                  ? isSlowConnection 
+                    ? 'bg-yellow-100 text-yellow-800' 
+                    : 'bg-green-100 text-green-800'
+                  : 'bg-orange-100 text-orange-800'
+              }`}>
+                {isOnline ? (
+                  <>
+                    <Wifi className="w-4 h-4" />
+                    {isSlowConnection ? 'Slow Connection' : 'Online'}
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-4 h-4" />
+                    Offline Mode
+                  </>
+                )}
+              </div>
+
+              {(savedOffline || lastSaved) && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                  {autoSaving ? (
+                    <>
+                      <div className="w-4 h-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      {lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Auto-saved'}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {!isOnline && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                  <Clock className="w-4 h-4" />
+                  Will sync when online
+                </div>
+              )}
+
+              {isOnline && pendingCount > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
+                  {isSyncing ? (
+                    <>
+                      <div className="w-4 h-4 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+                      Syncing {pendingCount} report{pendingCount !== 1 ? 's' : ''}...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      {pendingCount} pending sync
+                    </>
+                  )}
+                </div>
               )}
             </div>
-
-            {(savedOffline || lastSaved) && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                {autoSaving ? (
-                  <>
-                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    {lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Auto-saved'}
-                  </>
-                )}
-              </div>
-            )}
-
-            {!isOnline && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                <Clock className="w-4 h-4" />
-                Will sync when online
-              </div>
-            )}
-
-            {isOnline && pendingCount > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
-                {isSyncing ? (
-                  <>
-                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
-                    Syncing {pendingCount} report{pendingCount !== 1 ? 's' : ''}...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    {pendingCount} pending sync
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
