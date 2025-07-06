@@ -281,7 +281,7 @@ export default function ReportDetail() {
                                   onClick={() => setViewingAnnotation({
                                     url: attachment.url,
                                     fileName: attachment.fileName,
-                                    annotations: attachment.annotations
+                                    annotations: attachment.annotations || []
                                   })}
                                 >
                                   <Target className="w-4 h-4 mr-1" />

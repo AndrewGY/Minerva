@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,10 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Upload, X, CheckCircle, ChevronDown, ChevronUp, Copy, ExternalLink, Target } from "lucide-react";
+import { AlertCircle, Upload, X, CheckCircle, ChevronDown, ChevronUp, Copy, ExternalLink, Target, WifiOff, Wifi, Save, Clock } from "lucide-react";
 import ImageAnnotation from "@/components/ImageAnnotation";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { offlineStorage } from "@/lib/offline-storage";
 
 const schema = z.object({
   incidentDate: z.union([z.string(), z.null(), z.undefined()]).transform(val => val || new Date().toISOString().split('T')[0]),
@@ -66,6 +69,14 @@ export default function SubmitReport() {
   const [skipAddressEntry, setSkipAddressEntry] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
 
+  // Offline functionality
+  const { isOnline, isSlowConnection } = useOnlineStatus();
+  const { pendingCount, isProcessing: isSyncing } = useOfflineSync();
+  const [reportId] = useState(() => `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [savedOffline, setSavedOffline] = useState(false);
+
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: "onChange",
@@ -84,6 +95,68 @@ export default function SubmitReport() {
       regulationBreached: "",
     },
   });
+
+  // Auto-save functionality
+  const autoSave = async () => {
+    try {
+      setAutoSaving(true);
+      const formData = form.getValues();
+      await offlineStorage.saveReport(reportId, formData, files.map(f => f.file));
+      setLastSaved(new Date());
+      setSavedOffline(true);
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    } finally {
+      setAutoSaving(false);
+    }
+  };
+
+  // Load saved draft on component mount
+  useEffect(() => {
+    const loadSavedDraft = async () => {
+      try {
+        const savedReport = await offlineStorage.getReport(reportId);
+        if (savedReport) {
+          // Restore form data
+          Object.entries(savedReport.formData).forEach(([key, value]) => {
+            form.setValue(key as any, value);
+          });
+
+          // Restore files
+          const restoredFiles = savedReport.files.map(savedFile => ({
+            file: offlineStorage.base64ToFile(savedFile.data, savedFile.name, savedFile.type),
+            annotations: savedFile.annotations || [],
+            url: URL.createObjectURL(offlineStorage.base64ToFile(savedFile.data, savedFile.name, savedFile.type))
+          }));
+          setFiles(restoredFiles);
+          
+          setLastSaved(new Date(savedReport.lastModified));
+          setSavedOffline(true);
+        }
+      } catch (error) {
+        console.error('Failed to load draft:', error);
+      }
+    };
+
+    loadSavedDraft();
+  }, [reportId, form]);
+
+  // Auto-save on form changes
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      const timeoutId = setTimeout(autoSave, 2000); // Debounce 2 seconds
+      return () => clearTimeout(timeoutId);
+    });
+    return () => subscription.unsubscribe();
+  }, [form, files]);
+
+  // Auto-save when files change
+  useEffect(() => {
+    if (files.length > 0) {
+      const timeoutId = setTimeout(autoSave, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [files]);
 
   const handleLocationSelect = (locationData: { address: string; lat: number; lng: number }) => {
     form.setValue("location.address", locationData.address);
@@ -166,14 +239,20 @@ export default function SubmitReport() {
   };
 
   const onSubmit = async (data: FormData) => {
-    console.log("Form data being submitted:", data);
-    console.log("Form errors:", form.formState.errors);
-    
     setError("");
     setSubmitting(true);
 
     try {
+      if (!isOnline) {
+        // Save for offline submission
+        await offlineStorage.markForSubmission(reportId);
+        setPublicId(reportId);
+        setSubmitted(true);
+        setSavedOffline(true);
+        return;
+      }
 
+      // Online submission
       const uploadedFiles = [];
       for (const fileWithAnnotations of files) {
         const formData = new FormData();
@@ -184,28 +263,28 @@ export default function SubmitReport() {
           body: formData,
         });
         
-        if (res.ok) {
-          const result = await res.json();
-          const attachmentData = {
-            url: result.url,
-            fileName: fileWithAnnotations.file.name,
-            fileType: fileWithAnnotations.file.type,
-            fileSize: fileWithAnnotations.file.size,
-            annotations: fileWithAnnotations.annotations,
-          };
-          uploadedFiles.push(attachmentData);
+        if (!res.ok) {
+          throw new Error('File upload failed. Saving offline...');
         }
+        
+        const result = await res.json();
+        const attachmentData = {
+          url: result.url,
+          fileName: fileWithAnnotations.file.name,
+          fileType: fileWithAnnotations.file.type,
+          fileSize: fileWithAnnotations.file.size,
+          annotations: fileWithAnnotations.annotations,
+        };
+        uploadedFiles.push(attachmentData);
       }
 
       const incidentDateTime = new Date(`${data.incidentDate}T${data.incidentTime}`);
-
       const submitData = {
         ...data,
         incidentDate: incidentDateTime.toISOString(),
         attachments: uploadedFiles,
         recaptchaToken: "temp-disabled",
       };
-
 
       const response = await fetch("/api/reports", {
         method: "POST",
@@ -219,6 +298,8 @@ export default function SubmitReport() {
         throw new Error(result.error || "Submission failed");
       }
 
+      // Mark as successfully submitted
+      await offlineStorage.markAsSubmitted(reportId);
       setPublicId(result.publicId);
       setSubmitted(true);
       form.reset();
@@ -231,7 +312,16 @@ export default function SubmitReport() {
       setFiles([]);
       
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      // Fallback to offline storage on any error
+      try {
+        await offlineStorage.markForSubmission(reportId);
+        setPublicId(reportId);
+        setSubmitted(true);
+        setSavedOffline(true);
+        setError("Saved offline - will sync when connection returns");
+      } catch (offlineErr) {
+        setError(err.message || "Submission failed and couldn't save offline");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -245,11 +335,16 @@ export default function SubmitReport() {
         <Card className="w-full max-w-lg text-center">
           <CardHeader>
             <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-            <CardTitle className="text-green-700">Report Submitted Successfully</CardTitle>
+            <CardTitle className={savedOffline ? "text-blue-700" : "text-green-700"}>
+              {savedOffline ? "Report Saved Offline" : "Report Submitted Successfully"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <p className="text-gray-600">
-              Your report has been received and will be reviewed by our team.
+              {savedOffline 
+                ? "Your report has been saved and will be automatically submitted when you're back online."
+                : "Your report has been received and will be reviewed by our team."
+              }
             </p>
             
             <div className="bg-gray-100 p-4 rounded-md">
@@ -336,6 +431,68 @@ export default function SubmitReport() {
           <p className="text-gray-600">
             Report safety incidents securely. All reports are treated confidentially.
           </p>
+
+          {/* Offline Status & Auto-save Indicator */}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${
+              isOnline 
+                ? isSlowConnection 
+                  ? 'bg-yellow-100 text-yellow-800' 
+                  : 'bg-green-100 text-green-800'
+                : 'bg-orange-100 text-orange-800'
+            }`}>
+              {isOnline ? (
+                <>
+                  <Wifi className="w-4 h-4" />
+                  {isSlowConnection ? 'Slow Connection' : 'Online'}
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-4 h-4" />
+                  Offline Mode
+                </>
+              )}
+            </div>
+
+            {(savedOffline || lastSaved) && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                {autoSaving ? (
+                  <>
+                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Auto-saved'}
+                  </>
+                )}
+              </div>
+            )}
+
+            {!isOnline && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                <Clock className="w-4 h-4" />
+                Will sync when online
+              </div>
+            )}
+
+            {isOnline && pendingCount > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
+                {isSyncing ? (
+                  <>
+                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+                    Syncing {pendingCount} report{pendingCount !== 1 ? 's' : ''}...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    {pendingCount} pending sync
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
