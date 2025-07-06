@@ -8,7 +8,8 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci --only=production
+# Install both production and dev dependencies for build stage
+RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
